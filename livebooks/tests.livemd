@@ -1,0 +1,102 @@
+# Untitled notebook
+
+```elixir
+Mix.install([
+  {:tzdata, "~> 1.1"},
+  {:theory_craft, path: "D:/Documents/Dev/Elixir/theorycraft"}
+])
+
+Application.put_env(:elixir, :time_zone_database, Tzdata.TimeZoneDatabase)
+```
+
+## Section
+
+```elixir
+defmodule TheoryCraft.Test do
+  @moduledoc """
+  Documentation for `TheoryCraft`.
+  """
+
+  alias TheoryCraft.Utils
+  alias TheoryCraft.DataFeed
+  alias TheoryCraft.DataFeeds.MemoryDataFeed
+  alias TheoryCraft.DataFeeds.TicksCSVDataFeed
+
+  ## Public API
+
+  def test() do
+    dir = "D:/Documents/Dev/trading/python/data"
+    # filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
+    filename = "ticks_XAUUSD_Minute_20240101_230202_20241231_215859.csv"
+    full_path = Path.join(dir, filename)
+
+    # {:ok, producer} = TicksCSVDataFeed.start_link(full_path, dukascopy_opts())
+    {:ok, producer} = TicksCSVDataFeed.start_link(full_path, ctrader_opts())
+
+    fun = fn -> MemoryDataFeed.new(producer) end
+    memory_df = time("MemoryDataFeed loading", fun)
+
+    fun = fn ->
+      MemoryDataFeed
+      |> DataFeed.start_and_stream!([memory_df])
+      |> Enum.count()
+    end
+
+    count = time("MemoryDataFeed stream", fun)
+    IO.puts("Ticks count: #{count}")
+
+    :ok = MemoryDataFeed.close(memory_df)
+  end
+
+  ## Private functions
+
+  defp dukascopy_opts() do
+    [
+      time: "Local time",
+      ask: "Ask",
+      bid: "Bid",
+      ask_volume: "AskVolume",
+      bid_volume: "BidVolume",
+      skip_headers: false,
+      time_format: :dukascopy
+    ]
+  end
+
+  defp ctrader_opts() do
+    [
+      time: "Timestamp",
+      ask: "Ask",
+      bid: "Bid",
+      ask_volume: "AskVolume",
+      bid_volume: "BidVolume",
+      skip_headers: false
+    ]
+  end
+
+  defp time(name, fun) do
+    {time, value} = :timer.tc(fun, :millisecond)
+    IO.puts("#{name} took #{Utils.duration_ms_to_string(time)}")
+    value
+    end
+end
+
+
+TheoryCraft.Test.test()
+```
+
+```elixir
+dir = "D:/Documents/Dev/trading/python/data"
+filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
+full = Path.join(dir, filename)
+
+content =
+  full
+  |> File.stream!()
+  |> Enum.take(51)
+  |> Enum.join()
+
+File.write!(
+  "D:/Documents/Dev/Elixir/theorycraft/test/fixtures/XAUUSD_ticks_dukascopy.csv",
+content
+)
+```
