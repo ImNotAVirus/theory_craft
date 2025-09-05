@@ -1,9 +1,14 @@
 defmodule TheoryCraft.Utils do
   @moduledoc false
+  ## Internal helpers
 
   require TheoryCraft.Utils.Parsers, as: Parsers
 
   ## Public API
+
+  def genserver_opts(opts) do
+    Keyword.take(opts, ~w(debug name timeout spawn_opt hibernate_after)a)
+  end
 
   def parse_float(value, nil_value) do
     case value do

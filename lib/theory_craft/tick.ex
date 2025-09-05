@@ -5,7 +5,7 @@ defmodule TheoryCraft.Tick do
 
   @behaviour TheoryCraft.ETSSerializable
 
-  alias TheoryCraft.Tick
+  alias __MODULE__
 
   defstruct [:time, :ask, :bid, :ask_volume, :bid_volume]
 

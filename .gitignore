@@ -21,3 +21,5 @@ theory_craft-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+/.vscode/tasks.json

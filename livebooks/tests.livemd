@@ -18,34 +18,39 @@ defmodule TheoryCraft.Test do
   """
 
   alias TheoryCraft.Utils
-  alias TheoryCraft.DataFeed
-  alias TheoryCraft.DataFeeds.MemoryDataFeed
-  alias TheoryCraft.DataFeeds.TicksCSVDataFeed
+  alias TheoryCraft.DataFeeds.{MemoryDataFeed, TicksCSVDataFeed}
+  alias TheoryCraft.Layers.TickToCandleLayer
 
   ## Public API
 
   def test() do
     dir = "D:/Documents/Dev/trading/python/data"
-    # filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
-    filename = "ticks_XAUUSD_Minute_20240101_230202_20241231_215859.csv"
+    
+    filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
     full_path = Path.join(dir, filename)
+    stream = TicksCSVDataFeed.stream!([file: full_path] ++ dukascopy_opts())
+    
+    # filename = "ticks_XAUUSD_Minute_20240101_230202_20241231_215859.csv"
+    # full_path = Path.join(dir, filename)
+    # stream = TicksCSVDataFeed.stream!([file: full_path] ++ ctrader_opts())
 
-    # {:ok, producer} = TicksCSVDataFeed.start_link(full_path, dukascopy_opts())
-    {:ok, producer} = TicksCSVDataFeed.start_link(full_path, ctrader_opts())
-
-    fun = fn -> MemoryDataFeed.new(producer) end
+    fun = fn -> MemoryDataFeed.new(stream) end
     memory_df = time("MemoryDataFeed loading", fun)
+    memory_stream = MemoryDataFeed.stream!(from: memory_df)
+
+    ## Transform data to m5 bars
+    # TODO....
 
     fun = fn ->
-      MemoryDataFeed
-      |> DataFeed.start_and_stream!([memory_df])
-      |> Enum.count()
+      memory_stream
+      |> Stream.run()
+      |> IO.inspect()
     end
 
-    count = time("MemoryDataFeed stream", fun)
-    IO.puts("Ticks count: #{count}")
+    time("MemoryDataFeed in memory", fun)
 
-    :ok = MemoryDataFeed.close(memory_df)
+    IO.puts("Close")
+    # :ok = MemoryDataFeed.close(memory_df)
   end
 
   ## Private functions
@@ -85,18 +90,30 @@ TheoryCraft.Test.test()
 ```
 
 ```elixir
-dir = "D:/Documents/Dev/trading/python/data"
-filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
-full = Path.join(dir, filename)
+# dir = "D:/Documents/Dev/trading/python/data"
+# filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
+# full = Path.join(dir, filename)
 
-content =
-  full
-  |> File.stream!()
-  |> Enum.take(51)
-  |> Enum.join()
+# content =
+#   full
+#   |> File.stream!()
+#   |> Enum.take(51)
+#   |> Enum.join()
 
-File.write!(
-  "D:/Documents/Dev/Elixir/theorycraft/test/fixtures/XAUUSD_ticks_dukascopy.csv",
-content
-)
+# File.write!(
+#   "D:/Documents/Dev/Elixir/theorycraft/test/fixtures/XAUUSD_ticks_dukascopy.csv",
+# content
+# )
+
+
+# %Strategy{}
+# # |> add_data("tick_xauusd.csv", name: "xauusd_ticks")
+# |> add_data("tick_xauusd.csv")
+# |> resample("m5")
+# |> resample("D", data: 0, name: "xauusd_daily")
+# |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14")
+# |> add_indicator(TheoryCraft.Indicators.Supertrend, period: 14, name: "supertrend_14", data: 0)
+# |> add_strategy(TheoryCraft.Strategies.MyStrategy)
+# |> set_balance(100_000)
+# |> set_commission(0.001)
 ```

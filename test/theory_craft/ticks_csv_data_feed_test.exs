@@ -2,44 +2,57 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.DataFeeds.TicksCSVDataFeed
-  alias TheoryCraft.Tick
+  alias TheoryCraft.{Tick, MarketEvent}
 
   @fixture_path "test/fixtures/XAUUSD_ticks_dukascopy.csv"
 
   ## Tests
 
-  describe "start_link/2" do
-    test "successfully starts a GenStage producer with CSV file" do
-      assert {:ok, pid} = TicksCSVDataFeed.start_link(@fixture_path, dukascopy_opts())
-      assert is_pid(pid)
-      GenStage.stop(pid)
+  describe "stream/1" do
+    test "successfully creates a stream with CSV file" do
+      assert {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
+      assert Enumerable.impl_for(stream)
     end
 
-    @tag :capture_log
     test "fails when file does not exist" do
-      {stream, pid} = ticks_feed_stream_and_pid("non_existent_file.csv")
+      opts = Keyword.put(dukascopy_opts(), :file, "non_existent_file.csv")
+      {:ok, stream} = TicksCSVDataFeed.stream(opts)
 
-      # The producer starts successfully but fails when consuming
-      Process.flag(:trap_exit, true)
-      _ = catch_exit(Enum.take(stream, 1))
-
-      assert_received {:EXIT, ^pid, {error, _stacktrace}}
-      assert %File.Error{reason: :enoent, path: "non_existent_file.csv"} = error
+      assert_raise File.Error, ~r/no such file or directory/, fn ->
+        Enum.take(stream, 1)
+      end
     end
 
-    test "accepts GenServer options" do
-      genserver_opts = [name: :test_csv_feed]
-      opts = dukascopy_opts() ++ genserver_opts
+    test "requires file option" do
+      opts = Keyword.delete(dukascopy_opts(), :file)
+      assert {:error, ":file option is required"} = TicksCSVDataFeed.stream(opts)
+    end
+  end
 
-      assert {:ok, pid} = TicksCSVDataFeed.start_link(@fixture_path, opts)
-      assert Process.whereis(:test_csv_feed) == pid
-      GenStage.stop(pid)
+  describe "stream!/1" do
+    test "returns stream directly on success" do
+      stream = TicksCSVDataFeed.stream!(dukascopy_opts())
+      assert Enumerable.impl_for(stream)
+
+      # Should be able to consume it
+      first_event = Enum.at(stream, 0)
+      assert %MarketEvent{tick_or_candle: tick_or_candle, data: data} = first_event
+      assert %Tick{} = tick_or_candle
+      assert data == %{}
+    end
+
+    test "raises on error" do
+      opts = Keyword.delete(dukascopy_opts(), :file)
+
+      assert_raise ArgumentError, ~r/Failed to create stream/, fn ->
+        TicksCSVDataFeed.stream!(opts)
+      end
     end
   end
 
   describe "data streaming" do
     test "processes all rows from the CSV file" do
-      stream = ticks_feed_stream(@fixture_path)
+      {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
       ticks = Enum.to_list(stream)
 
       # Count lines in CSV file (excluding header)
@@ -51,19 +64,14 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
       assert length(ticks) == expected_count
     end
 
-    test "produces Tick structs from CSV data" do
-      ticks =
-        @fixture_path
-        |> ticks_feed_stream()
-        |> Enum.to_list()
-
-      # Verify all items are Tick structs
-      assert Enum.all?(ticks, &match?(%Tick{}, &1))
+    test "produces Tick events from CSV data" do
+      {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
+      assert Enum.all?(stream, &match?(%MarketEvent{tick_or_candle: %Tick{}}, &1))
     end
 
     test "correctly parses time field with dukascopy format" do
-      stream = ticks_feed_stream(@fixture_path)
-      first_tick = Enum.at(stream, 0)
+      {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
+      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
 
       # Note: The CSV shows "18.08.2025 00:00:01.154 GMT+0200" but after parsing it's in UTC
       # Adjusted to UTC from GMT+0200
@@ -71,8 +79,8 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
     end
 
     test "correctly parses numeric fields" do
-      stream = ticks_feed_stream(@fixture_path)
-      first_tick = Enum.at(stream, 0)
+      {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
+      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
 
       # Based on first line of CSV: 3337.675,3336.015,450,450
       assert first_tick.ask == 3337.675
@@ -83,38 +91,31 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
   end
 
   describe "error handling" do
-    @tag :capture_log
     test "raises error when required header is missing" do
       invalid_options = Keyword.put(dukascopy_opts(), :time, "NonExistentTime")
-      {stream, pid} = ticks_feed_stream_and_pid(@fixture_path, invalid_options)
+      {:ok, stream} = TicksCSVDataFeed.stream(invalid_options)
 
-      Process.flag(:trap_exit, true)
-      _ = catch_exit(Enum.take(stream, 1))
-
-      assert_received {:EXIT, ^pid, {error, _stacktrace}}
-      assert %ArgumentError{message: "Header NonExistentTime not found"} = error
+      assert_raise ArgumentError, "Header NonExistentTime not found", fn ->
+        Enum.take(stream, 1)
+      end
     end
 
-    @tag :capture_log
     test "raises error with invalid header configuration" do
-      # Invalid type
       invalid_options = Keyword.put(dukascopy_opts(), :time, %{invalid: "config"})
-      {stream, pid} = ticks_feed_stream_and_pid(@fixture_path, invalid_options)
+      {:ok, stream} = TicksCSVDataFeed.stream(invalid_options)
 
-      Process.flag(:trap_exit, true)
-      _ = catch_exit(Enum.take(stream, 1))
-
-      assert_received {:EXIT, ^pid, {error, _stacktrace}}
-      assert %ArgumentError{message: message} = error
-      assert "Headers must be integers or binaries (got %{invalid: \"config\"})" = message
+      assert_raise ArgumentError, ~r/Headers must be integers or binaries/, fn ->
+        Enum.take(stream, 1)
+      end
     end
   end
 
   describe "configuration options" do
     test "allows nil values for optional columns" do
       minimal_options = Keyword.merge(dukascopy_opts(), ask_volume: nil, bid_volume: nil)
-      stream = ticks_feed_stream(@fixture_path, minimal_options)
-      first_tick = Enum.at(stream, 0)
+
+      {:ok, stream} = TicksCSVDataFeed.stream(minimal_options)
+      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
 
       # Verify that nil columns are not set
       assert is_nil(first_tick.ask_volume)
@@ -131,6 +132,7 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
 
   defp dukascopy_opts() do
     [
+      file: @fixture_path,
       time: "Local time",
       ask: "Ask",
       bid: "Bid",
@@ -139,15 +141,5 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
       skip_headers: false,
       time_format: :dukascopy
     ]
-  end
-
-  defp ticks_feed_stream(filename, opts \\ dukascopy_opts()) do
-    {:ok, pid} = TicksCSVDataFeed.start_link(filename, opts)
-    GenStage.stream([{pid, cancel: :transient}])
-  end
-
-  defp ticks_feed_stream_and_pid(filename, opts \\ dukascopy_opts()) do
-    {:ok, pid} = TicksCSVDataFeed.start_link(filename, opts)
-    {GenStage.stream([{pid, cancel: :transient}]), pid}
   end
 end

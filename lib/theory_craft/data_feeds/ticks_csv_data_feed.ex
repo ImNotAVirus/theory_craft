@@ -1,27 +1,37 @@
 defmodule TheoryCraft.DataFeeds.TicksCSVDataFeed do
   @moduledoc """
-  A GenStage producer for streaming CSV data.
+  A data feed for streaming CSV tick data.
 
-  This module provides a way to create a GenStage producer that streams
-  Ticks data from a CSV file.
+  This module provides a way to stream Tick data from a CSV file,
+  implementing the DataFeed behaviour.
   """
+
+  use TheoryCraft.DataFeed
 
   alias NimbleCSV.RFC4180, as: CSV
   alias TheoryCraft.Utils
   alias TheoryCraft.Tick
+  alias TheoryCraft.MarketEvent
 
-  ## Public API
+  ## DataFeed behaviour
 
-  @spec start_link(String.t(), Keyword.t()) :: GenServer.on_start()
-  def start_link(file_path, opts \\ []) do
-    genserver_opts = Keyword.take(opts, ~w(debug name timeout spawn_opt hibernate_after)a)
-    skip_headers = Keyword.get(opts, :skip_headers, true)
+  @impl true
+  def stream(opts) do
+    with {:ok, file} <- Keyword.fetch(opts, :file) do
+      skip_headers = Keyword.get(opts, :skip_headers, true)
+      read_ahead = Keyword.get(opts, :read_ahead, 500_000)
 
-    file_path
-    |> File.stream!(read_ahead: 500_000)
-    |> CSV.parse_stream(skip_headers: skip_headers)
-    |> transform_csv_fun(skip_headers, opts)
-    |> GenStage.from_enumerable([on_cancel: :stop] ++ genserver_opts)
+      stream =
+        file
+        |> File.stream!(read_ahead: read_ahead)
+        |> CSV.parse_stream(skip_headers: skip_headers)
+        |> transform_csv_fun(skip_headers, opts)
+        |> Stream.map(&%MarketEvent{tick_or_candle: &1})
+
+      {:ok, stream}
+    else
+      :error -> {:error, ":file option is required"}
+    end
   end
 
   ## Private functions
