@@ -119,6 +119,306 @@ lib/theory_craft/
     └── tick_to_candle_processor.ex  # Tick resampling
 ```
 
+## Coding Guidelines
+
+### Elixir Best Practices
+
+#### DateTime and Struct Manipulation
+
+1. **Preserve microsecond precision dynamically**
+   - Never hardcode microsecond precision (e.g., `{0, 6}`)
+   - Always extract and preserve the precision from the input datetime
+   - Example:
+     ```elixir
+     # ❌ Bad - hardcoded precision
+     %DateTime{datetime | second: new_second, microsecond: {0, 6}}
+
+     # ✅ Good - preserve input precision
+     %DateTime{microsecond: {_value, precision}} = datetime
+     %DateTime{datetime | second: new_second, microsecond: {0, precision}}
+     ```
+
+2. **Use explicit struct types for updates**
+   - Always specify the struct type when updating fields
+   - Never use generic map syntax `%{...}` for struct updates
+   - Example:
+     ```elixir
+     # ❌ Bad - generic map update
+     %{datetime | hour: new_hour}
+     %{date | day: 1}
+
+     # ✅ Good - explicit struct type
+     %DateTime{datetime | hour: new_hour}
+     %Date{date | day: 1}
+     ```
+
+3. **Use pattern matching for multiple field access**
+   - When a function uses multiple fields from the same struct, use pattern matching instead of dot access
+   - This makes the code more explicit about which fields are being used
+   - Example:
+     ```elixir
+     # ❌ Bad - multiple dot accesses
+     defp process_datetime(datetime) do
+       year = datetime.year
+       month = datetime.month
+       day = datetime.day
+       # ...
+     end
+
+     # ✅ Good - pattern matching in function body
+     defp process_datetime(datetime) do
+       %DateTime{year: year, month: month, day: day} = datetime
+       # ...
+     end
+     ```
+
+4. **Pattern match only execution flow fields in function headers**
+   - In function headers, only pattern match fields needed for execution flow (guards, clause dispatch)
+   - Pattern match other fields inside the function body
+   - This keeps function signatures focused on what determines execution path
+   - Example:
+     ```elixir
+     # ❌ Bad - pattern matching all fields in header
+     def function(%Structure{field1: field1, field2: field2, field3: :toto} = struct)
+         when field2 in [1, 2, 3] do
+       # field1 is only used in body, not in guard
+       # ...
+     end
+
+     # ✅ Good - only flow-critical fields in header
+     def function(%Structure{field2: field2, field3: :toto} = struct)
+         when field2 in [1, 2, 3] do
+       # Pattern match other fields in body when needed
+       %Structure{field1: field1} = struct
+       # ...
+     end
+     ```
+
+5. **Add blank line before return value in functions with more than 3 lines**
+   - If a function has more than 3 lines and returns a value, add a blank line before the return
+   - This visually separates the function logic from its result
+   - Example:
+     ```elixir
+     # ❌ Bad - no blank line before return
+     defp align_time(datetime, {"M", _mult}, %{market_open: market_open}) do
+       %DateTime{microsecond: {_value, precision}, time_zone: time_zone} = datetime
+       date = DateTime.to_date(datetime)
+       first_of_month = %Date{date | day: 1}
+       {:ok, naive} = NaiveDateTime.new(first_of_month, market_open)
+       result = DateTime.from_naive!(naive, time_zone)
+       %DateTime{result | microsecond: {0, precision}}
+     end
+
+     # ✅ Good - blank line before return
+     defp align_time(datetime, {"M", _mult}, %{market_open: market_open}) do
+       %DateTime{microsecond: {_value, precision}, time_zone: time_zone} = datetime
+       date = DateTime.to_date(datetime)
+       first_of_month = %Date{date | day: 1}
+       {:ok, naive} = NaiveDateTime.new(first_of_month, market_open)
+       result = DateTime.from_naive!(naive, time_zone)
+
+       %DateTime{result | microsecond: {0, precision}}
+     end
+     ```
+
+6. **Separate logical blocks with blank lines**
+   - Avoid large blocks of code without visual separation
+   - Group related operations and separate them with blank lines
+   - Typical grouping: variable extraction → computation → result
+   - Example:
+     ```elixir
+     # ❌ Bad - no logical separation
+     defp add_timeframe(datetime, {"M", mult}) do
+       %DateTime{year: year, month: month, day: day, hour: hour, minute: minute, second: second, microsecond: microsecond, time_zone: time_zone} = datetime
+       new_month = month + mult
+       {new_year, final_month} = if new_month > 12 do
+         years_to_add = div(new_month - 1, 12)
+         {year + years_to_add, rem(new_month - 1, 12) + 1}
+       else
+         {year, new_month}
+       end
+       days_in_new_month = Date.days_in_month(Date.new!(new_year, final_month, 1))
+       final_day = min(day, days_in_new_month)
+       new_date = Date.new!(new_year, final_month, final_day)
+       {:ok, time} = Time.new(hour, minute, second, microsecond)
+       {:ok, naive} = NaiveDateTime.new(new_date, time)
+       DateTime.from_naive!(naive, time_zone)
+     end
+
+     # ✅ Good - logical blocks separated
+     defp add_timeframe(datetime, {"M", mult}) do
+       # Extract fields from datetime
+       %DateTime{
+         year: year,
+         month: month,
+         day: day,
+         hour: hour,
+         minute: minute,
+         second: second,
+         microsecond: microsecond,
+         time_zone: time_zone
+       } = datetime
+
+       # Calculate new month and year
+       new_month = month + mult
+
+       {new_year, final_month} =
+         if new_month > 12 do
+           years_to_add = div(new_month - 1, 12)
+           {year + years_to_add, rem(new_month - 1, 12) + 1}
+         else
+           {year, new_month}
+         end
+
+       # Adjust day for month overflow
+       days_in_new_month = Date.days_in_month(Date.new!(new_year, final_month, 1))
+       final_day = min(day, days_in_new_month)
+
+       # Build new datetime
+       new_date = Date.new!(new_year, final_month, final_day)
+       {:ok, time} = Time.new(hour, minute, second, microsecond)
+       {:ok, naive} = NaiveDateTime.new(new_date, time)
+
+       DateTime.from_naive!(naive, time_zone)
+     end
+     ```
+
+7. **Only add comments for complex or non-obvious logic**
+   - Do not add comments to describe what the code does if it's already clear from the code itself
+   - Blank lines are sufficient to separate logical blocks
+   - Add comments only when the logic is particularly complex or non-intuitive
+   - Example:
+     ```elixir
+     # ❌ Bad - unnecessary comments
+     defp add_timeframe(datetime, {"D", mult}) do
+       # Extract fields from datetime
+       %DateTime{...} = datetime
+
+       # Add days to date
+       date = Date.new!(year, month, day)
+       new_date = Date.add(date, mult)
+
+       # Build new datetime
+       {:ok, time} = Time.new(hour, minute, second, microsecond)
+       ...
+     end
+
+     # ✅ Good - no comments needed, code is self-explanatory
+     defp add_timeframe(datetime, {"D", mult}) do
+       %DateTime{...} = datetime
+
+       date = Date.new!(year, month, day)
+       new_date = Date.add(date, mult)
+
+       {:ok, time} = Time.new(hour, minute, second, microsecond)
+       ...
+     end
+
+     # ✅ Good - comment explains non-obvious logic
+     defp add_timeframe(datetime, {"M", mult}) do
+       %DateTime{...} = datetime
+
+       # Calculate new month handling year overflow
+       # If new_month > 12, we need to increment year and wrap month
+       new_month = month + mult
+       {new_year, final_month} =
+         if new_month > 12 do
+           years_to_add = div(new_month - 1, 12)
+           {year + years_to_add, rem(new_month - 1, 12) + 1}
+         else
+           {year, new_month}
+         end
+       ...
+     end
+     ```
+
+8. **Document all public modules and functions**
+   - Every public module MUST have a `@moduledoc` with a clear description
+   - Every public function MUST have explicit documentation including:
+     - `@doc` description of what the function does
+     - `@spec` type specification with arguments and return types
+     - Examples of usage (using `## Examples` section with doctest format)
+   - Private modules should have `@moduledoc false` followed by comments explaining the module's purpose
+   - Example:
+     ```elixir
+     # ❌ Bad - public module without documentation
+     defmodule TheoryCraft.TimeFrame do
+       def parse(timeframe) do
+         # ...
+       end
+     end
+
+     # ✅ Good - public module with full documentation
+     defmodule TheoryCraft.TimeFrame do
+       @moduledoc """
+       Helpers for working with time frames.
+
+       Provides functions to parse and validate timeframe strings like "m5" (5 minutes),
+       "h1" (1 hour), or "D" (daily).
+       """
+
+       @type unit :: String.t()
+       @type multiplier :: non_neg_integer()
+       @type t :: {unit(), multiplier()}
+
+       @doc """
+       Parses a timeframe string into a tuple.
+
+       ## Parameters
+         - `timeframe` - A string representing a timeframe (e.g., "m5", "h1", "D")
+
+       ## Returns
+         - `{:ok, {unit, multiplier}}` on success
+         - `:error` if the timeframe is invalid
+
+       ## Examples
+           iex> TheoryCraft.TimeFrame.parse("m5")
+           {:ok, {"m", 5}}
+
+           iex> TheoryCraft.TimeFrame.parse("h1")
+           {:ok, {"h", 1}}
+
+           iex> TheoryCraft.TimeFrame.parse("invalid")
+           :error
+       """
+       @spec parse(String.t()) :: {:ok, t()} | :error
+       def parse(timeframe) do
+         # ...
+       end
+     end
+
+     # ✅ Good - private module with @moduledoc false and comments
+     defmodule TheoryCraft.Internal.Helper do
+       @moduledoc false
+
+       # This module provides internal helper functions for date manipulation.
+       # It should not be used outside of TheoryCraft.TimeFrame.
+       #
+       # Functions in this module assume valid input and may raise on invalid data.
+
+       def internal_helper(value) do
+         # ...
+       end
+     end
+     ```
+
+### Code Formatting
+
+**Always run `mix format` on modified Elixir files when finished**
+- After completing all modifications, always format the changed `.ex` and `.exs` files
+- `mix format` only works on Elixir source files (`.ex` and `.exs`)
+- Do NOT run `mix format` on other files like `.md`, `.txt`, etc.
+- This ensures consistent code style across the project
+- Example workflow:
+  ```bash
+  # After modifying Elixir files
+  mix format lib/theory_craft/processors/tick_to_candle_processor.ex
+  mix format test/theory_craft/processors/tick_to_candle_processor_test.exs
+
+  # Or format all Elixir files in the project
+  mix format
+  ```
+
 ## Dependencies
 
 - `nimble_csv`: CSV parsing for data feeds

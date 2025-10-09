@@ -496,6 +496,906 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
   end
 
+  describe "next/2 - monthly timeframes" do
+    test "creates first candle aligned on first of month" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick on Jan 17 should align to Jan 1
+      tick = build_tick(~U[2024-01-17 15:45:30Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 09:30:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-02-01 09:30:00Z]
+    end
+
+    test "updates candle within same month" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-05 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-25 18:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 00:00:00Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert new_state.next_time == ~U[2024-02-01 00:00:00Z]
+    end
+
+    test "creates new candle on next month" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-20 15:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-02-10 12:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-02-01 09:30:00Z]
+      assert candle.open == 2004.0
+      assert new_state.next_time == ~U[2024-03-01 09:30:00Z]
+    end
+
+    test "handles M with multiplier > 1" do
+      opts = [data: "xauusd", timeframe: "M3", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 00:00:00Z]
+      assert new_state.next_time == ~U[2024-04-01 00:00:00Z]
+    end
+
+    test "handles month overflow (Jan 31 to Feb)" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-31 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-02-15 10:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-02-01 00:00:00Z]
+      # Feb has 29 days in 2024 (leap year), but we start on 1st
+      assert new_state.next_time == ~U[2024-03-01 00:00:00Z]
+    end
+
+    test "accumulates volume with fake_volume?" do
+      opts = [data: "xauusd", timeframe: "M", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-10 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-20 15:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "handles different price types" do
+      opts = [data: "xauusd", timeframe: "M", price_type: :bid]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2000.0
+    end
+  end
+
+  describe "next/2 - weekly timeframes" do
+    test "creates first candle aligned on Monday market_open by default" do
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # 2024-01-17 is a Wednesday, should align to Monday 2024-01-15
+      tick = build_tick(~U[2024-01-17 15:45:30Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 09:30:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-22 09:30:00Z]
+    end
+
+    test "creates first candle aligned on Sunday when weekly_open: :sunday" do
+      opts = [data: "xauusd", timeframe: "W", weekly_open: :sunday, market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # 2024-01-17 is a Wednesday, should align to Sunday 2024-01-14
+      tick = build_tick(~U[2024-01-17 15:45:30Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-14 00:00:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-21 00:00:00Z]
+    end
+
+    test "updates candle within same week" do
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-19 18:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 00:00:00Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert new_state.next_time == ~U[2024-01-22 00:00:00Z]
+    end
+
+    test "creates new candle on next week" do
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-17 15:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-23 12:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-22 09:30:00Z]
+      assert candle.open == 2004.0
+      assert new_state.next_time == ~U[2024-01-29 09:30:00Z]
+    end
+
+    test "handles W with multiplier > 1" do
+      opts = [data: "xauusd", timeframe: "W2", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 00:00:00Z]
+      assert new_state.next_time == ~U[2024-01-29 00:00:00Z]
+    end
+
+    test "accumulates volume with fake_volume?" do
+      opts = [data: "xauusd", timeframe: "W", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-18 15:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "handles different price types" do
+      opts = [data: "xauusd", timeframe: "W", price_type: :ask]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2002.0
+    end
+  end
+
+  describe "next/2 - daily timeframes" do
+    test "creates first candle aligned on market_open" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick at 15:45 should align to 09:30:00 same day
+      tick = build_tick(~U[2024-01-15 15:45:30Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 09:30:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-16 09:30:00Z]
+    end
+
+    test "updates candle within same day" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-15 10:30:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-15 18:45:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 00:00:00Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert candle.high == 2004.0
+      assert new_state.next_time == ~U[2024-01-16 00:00:00Z]
+    end
+
+    test "creates new candle on next day" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-15 15:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-16 12:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-16 09:30:00Z]
+      assert candle.open == 2004.0
+      assert new_state.next_time == ~U[2024-01-17 09:30:00Z]
+    end
+
+    test "handles D with multiplier > 1" do
+      opts = [data: "xauusd", timeframe: "D3", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-15 00:00:00Z]
+      assert new_state.next_time == ~U[2024-01-18 00:00:00Z]
+    end
+
+    test "accumulates volume with fake_volume?" do
+      opts = [data: "xauusd", timeframe: "D", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-15 15:00:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "handles different price types" do
+      opts = [data: "xauusd", timeframe: "D", price_type: :bid]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2000.0
+    end
+  end
+
+  describe "next/2 - hour-based timeframes" do
+    test "creates first candle with aligned time" do
+      opts = [data: "xauusd", timeframe: "h4"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick at 11:23:45 should align to 08:00:00 for h4
+      tick = build_tick(~U[2024-01-01 11:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 08:00:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-01 12:00:00Z]
+    end
+
+    test "updates candle within same timeframe period" do
+      opts = [data: "xauusd", timeframe: "h1"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:17:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:45:15Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:00:00Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert candle.high == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 11:00:00Z]
+    end
+
+    test "creates new candle when crossing timeframe boundary" do
+      opts = [data: "xauusd", timeframe: "h4"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:30:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 14:15:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 12:00:00Z]
+      assert candle.open == 2004.0
+      assert candle.close == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 16:00:00Z]
+    end
+
+    test "handles h1 (1 hour) timeframe" do
+      opts = [data: "xauusd", timeframe: "h1"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:00:00Z]
+      assert new_state.next_time == ~U[2024-01-01 11:00:00Z]
+    end
+
+    test "accumulates volume with fake_volume?" do
+      opts = [data: "xauusd", timeframe: "h1", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:12:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:45:00Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "accumulates real volume when provided" do
+      opts = [data: "xauusd", timeframe: "h1", fake_volume?: false]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 =
+        build_tick(~U[2024-01-01 10:12:30Z],
+          bid: 2000.0,
+          ask: 2002.0,
+          bid_volume: 20.0,
+          ask_volume: 30.0
+        )
+
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 =
+        build_tick(~U[2024-01-01 10:45:00Z],
+          bid: 2003.0,
+          ask: 2005.0,
+          bid_volume: 15.0,
+          ask_volume: 25.0
+        )
+
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 90.0
+    end
+
+    test "handles :bid price type" do
+      opts = [data: "xauusd", timeframe: "h1", price_type: :bid]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2000.0
+    end
+
+    test "handles :ask price type" do
+      opts = [data: "xauusd", timeframe: "h1", price_type: :ask]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2002.0
+    end
+  end
+
+  describe "next/2 - minute-based timeframes" do
+    test "creates first candle with aligned time" do
+      opts = [data: "xauusd", timeframe: "m5"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick at 10:23:45 should align to 10:20:00 for m5
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:20:00Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-01 10:25:00Z]
+    end
+
+    test "updates candle within same timeframe period" do
+      opts = [data: "xauusd", timeframe: "m15"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:17:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:22:15Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:15:00Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert candle.high == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 10:30:00Z]
+    end
+
+    test "creates new candle when crossing timeframe boundary" do
+      opts = [data: "xauusd", timeframe: "m5"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:22:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:27:15Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:25:00Z]
+      assert candle.open == 2004.0
+      assert candle.close == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 10:30:00Z]
+    end
+
+    test "handles m1 (1 minute) timeframe" do
+      opts = [data: "xauusd", timeframe: "m1"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:23:00Z]
+      assert new_state.next_time == ~U[2024-01-01 10:24:00Z]
+    end
+
+    test "accumulates volume with fake_volume?" do
+      opts = [data: "xauusd", timeframe: "m5", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:12:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:14:45Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "accumulates real volume when provided" do
+      opts = [data: "xauusd", timeframe: "m5", fake_volume?: false]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 =
+        build_tick(~U[2024-01-01 10:12:30Z],
+          bid: 2000.0,
+          ask: 2002.0,
+          bid_volume: 100.0,
+          ask_volume: 150.0
+        )
+
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 =
+        build_tick(~U[2024-01-01 10:14:45Z],
+          bid: 2003.0,
+          ask: 2005.0,
+          bid_volume: 50.0,
+          ask_volume: 75.0
+        )
+
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 375.0
+    end
+
+    test "handles :bid price type" do
+      opts = [data: "xauusd", timeframe: "m5", price_type: :bid]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2000.0
+    end
+
+    test "handles :ask price type" do
+      opts = [data: "xauusd", timeframe: "m5", price_type: :ask]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2002.0
+    end
+  end
+
+  describe "next/2 - second-based timeframes" do
+    test "creates first candle with aligned time" do
+      opts = [data: "xauusd", timeframe: "s5"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick at 10:00:23 should align to 10:00:20 for s5
+      tick = build_tick(~U[2024-01-01 10:00:23Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:00:20Z]
+      assert candle.open == 2001.0
+      assert new_state.next_time == ~U[2024-01-01 10:00:25Z]
+    end
+
+    test "updates candle within same timeframe period" do
+      opts = [data: "xauusd", timeframe: "s10"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:00:12Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:00:15Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:00:10Z]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+      assert candle.high == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 10:00:20Z]
+    end
+
+    test "creates new candle when crossing timeframe boundary" do
+      opts = [data: "xauusd", timeframe: "s5"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:00:22Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:00:27Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.time == ~U[2024-01-01 10:00:25Z]
+      assert candle.open == 2004.0
+      assert candle.close == 2004.0
+      assert new_state.next_time == ~U[2024-01-01 10:00:30Z]
+    end
+
+    test "handles :bid price type" do
+      opts = [data: "xauusd", timeframe: "s15", price_type: :bid]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:00:23Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2000.0
+    end
+
+    test "handles :ask price type" do
+      opts = [data: "xauusd", timeframe: "s30", price_type: :ask]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:00:23Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.open == 2002.0
+    end
+
+    test "accumulates volume with fake_volume? true" do
+      opts = [data: "xauusd", timeframe: "s5", fake_volume?: true]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:00:12Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:00:14Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 2.0
+    end
+
+    test "accumulates real volume when provided" do
+      opts = [data: "xauusd", timeframe: "s5", fake_volume?: false]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 =
+        build_tick(~U[2024-01-01 10:00:12Z],
+          bid: 2000.0,
+          ask: 2002.0,
+          bid_volume: 10.0,
+          ask_volume: 15.0
+        )
+
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 =
+        build_tick(~U[2024-01-01 10:00:14Z],
+          bid: 2003.0,
+          ask: 2005.0,
+          bid_volume: 5.0,
+          ask_volume: 8.0
+        )
+
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      assert candle.volume == 38.0
+    end
+  end
+
+  describe "next/2 - different timezones support" do
+    test "handles daily timeframe with Europe/Paris timezone" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Create a tick in Europe/Paris timezone
+      {:ok, paris_time} = DateTime.new(~D[2024-01-15], ~T[15:45:30], "Europe/Paris")
+      tick = build_tick(paris_time, bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      # Should align to market_open on the same day in Europe/Paris
+      assert candle.time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(candle.time) == ~D[2024-01-15]
+      assert DateTime.to_time(candle.time) == ~T[09:30:00]
+      assert candle.open == 2001.0
+
+      # Next time should also be in Europe/Paris
+      assert new_state.next_time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-01-16]
+      assert DateTime.to_time(new_state.next_time) == ~T[09:30:00]
+    end
+
+    test "handles weekly timeframe with America/New_York timezone" do
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # 2024-01-17 is a Wednesday, should align to Monday 2024-01-15
+      {:ok, ny_time} = DateTime.new(~D[2024-01-17], ~T[15:45:30], "America/New_York")
+      tick = build_tick(ny_time, bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      # Should align to Monday market_open in America/New_York
+      assert candle.time.time_zone == "America/New_York"
+      assert DateTime.to_date(candle.time) == ~D[2024-01-15]
+      assert DateTime.to_time(candle.time) == ~T[09:30:00]
+      assert candle.open == 2001.0
+
+      # Next time should be next Monday in America/New_York
+      assert new_state.next_time.time_zone == "America/New_York"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-01-22]
+      assert DateTime.to_time(new_state.next_time) == ~T[09:30:00]
+    end
+
+    test "handles monthly timeframe with Europe/Paris timezone" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # Tick on Jan 17 should align to Jan 1 in Europe/Paris
+      {:ok, paris_time} = DateTime.new(~D[2024-01-17], ~T[15:45:30], "Europe/Paris")
+      tick = build_tick(paris_time, bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
+
+      candle = new_event.data["xauusd"]
+      # Should align to first of month + market_open in Europe/Paris
+      assert candle.time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(candle.time) == ~D[2024-01-01]
+      assert DateTime.to_time(candle.time) == ~T[09:30:00]
+      assert candle.open == 2001.0
+
+      # Next time should be next month in Europe/Paris
+      assert new_state.next_time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-02-01]
+      assert DateTime.to_time(new_state.next_time) == ~T[09:30:00]
+    end
+
+    test "handles crossing month boundary with America/New_York timezone" do
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick in January
+      {:ok, ny_time1} = DateTime.new(~D[2024-01-20], ~T[15:00:00], "America/New_York")
+      tick1 = build_tick(ny_time1, bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick in February
+      {:ok, ny_time2} = DateTime.new(~D[2024-02-10], ~T[12:00:00], "America/New_York")
+      tick2 = build_tick(ny_time2, bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      # New candle should be in February in America/New_York timezone
+      assert candle.time.time_zone == "America/New_York"
+      assert DateTime.to_date(candle.time) == ~D[2024-02-01]
+      assert DateTime.to_time(candle.time) == ~T[00:00:00]
+      assert candle.open == 2004.0
+
+      # Next time should be March in America/New_York
+      assert new_state.next_time.time_zone == "America/New_York"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-03-01]
+    end
+
+    test "preserves timezone across candle updates" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick creates candle
+      {:ok, paris_time1} = DateTime.new(~D[2024-01-15], ~T[10:30:00], "Europe/Paris")
+      tick1 = build_tick(paris_time1, bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick updates same candle
+      {:ok, paris_time2} = DateTime.new(~D[2024-01-15], ~T[18:45:00], "Europe/Paris")
+      tick2 = build_tick(paris_time2, bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      # Candle time should still be in Europe/Paris
+      assert candle.time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(candle.time) == ~D[2024-01-15]
+      assert candle.open == 2001.0
+      assert candle.close == 2004.0
+
+      # Next time should still be in Europe/Paris
+      assert new_state.next_time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-01-16]
+    end
+
+    test "handles DST transitions correctly" do
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # March 31, 2024 is DST transition in Europe/Paris (UTC+1 -> UTC+2)
+      {:ok, before_dst} = DateTime.new(~D[2024-03-31], ~T[15:00:00], "Europe/Paris")
+      tick1 = build_tick(before_dst, bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _event, state} = TickToCandleProcessor.next(event1, state)
+
+      # April 1, 2024 is after DST transition
+      {:ok, after_dst} = DateTime.new(~D[2024-04-01], ~T[12:00:00], "Europe/Paris")
+      tick2 = build_tick(after_dst, bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event, new_state} = TickToCandleProcessor.next(event2, state)
+
+      candle = new_event.data["xauusd"]
+      # Should handle DST correctly, timezone preserved
+      assert candle.time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(candle.time) == ~D[2024-04-01]
+      assert DateTime.to_time(candle.time) == ~T[09:30:00]
+
+      assert new_state.next_time.time_zone == "Europe/Paris"
+      assert DateTime.to_date(new_state.next_time) == ~D[2024-04-02]
+    end
+  end
+
   ## Private test helpers
 
   defp build_tick(time, opts) do

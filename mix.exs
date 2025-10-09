@@ -8,7 +8,8 @@ defmodule TheoryCraft.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases()
+      aliases: aliases(),
+      elixirc_options: [warnings_as_errors: true]
     ]
   end
 
@@ -32,6 +33,7 @@ defmodule TheoryCraft.MixProject do
     [
       {:nimble_csv, "~> 1.3"},
       {:nimble_parsec, "~> 1.4"},
+      {:tzdata, "~> 1.1", only: :test},
 
       ## AI agent
       {:tidewave, "~> 0.5", only: :dev},
