@@ -1,16 +1,16 @@
 defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   @moduledoc """
-  A GenStage producer for streaming in-memory data.
+  An in-memory data feed implementation.
 
-  This module provides a way to create a GenStage producer that streams
-  data from an in-memory ETS table.
+  This module provides a way to store and stream market data
+  to an in-memory ETS table.
   """
 
   use TheoryCraft.DataFeed
 
   alias __MODULE__
   alias TheoryCraft.{Candle, Tick}
-  alias TheoryCraft.MarketEvent
+  alias TheoryCraft.DataFeed
 
   defstruct [:table, :precision]
 
@@ -20,25 +20,22 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
 
   @doc """
   This function creates a new ETS table and fills it with data from the given data feed.
+
+  ## Parameters
+
+    - `enumerable`: The enumerable stream of data to be stored in the ETS table.
+    - `time_precision`: The precision to use for timestamps in the data. 
+      You can use `:auto` to guess the precision based on data.
+
   """
-  @spec new(pid() | Enumerable.t(MarketEvent.data()), :native | System.time_unit()) :: t()
-  def new(data_feed, time_precision \\ :millisecond)
-
-  def new(data_feed, time_precision) when is_pid(data_feed) do
+  @spec new(Enumerable.t(DataFeed.stream()), :auto | :native | System.time_unit()) :: t()
+  def new(enumerable, time_precision \\ :auto) do
     table = create_ets_table()
+    precision = get_precision(enumerable, time_precision)
 
-    enumerable = GenStage.stream([{data_feed, cancel: :transient}])
-    :ok = fill_table(table, enumerable, time_precision)
+    :ok = fill_table(table, enumerable, precision)
 
-    %MemoryDataFeed{table: table, precision: time_precision}
-  end
-
-  def new(enumerable, time_precision) do
-    table = create_ets_table()
-
-    :ok = fill_table(table, enumerable, time_precision)
-
-    %MemoryDataFeed{table: table, precision: time_precision}
+    %MemoryDataFeed{table: table, precision: precision}
   end
 
   @doc """
@@ -100,8 +97,18 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
     end)
   end
 
-  defp dump(%MarketEvent{tick_or_candle: tick_or_candle}, index, precision) do
-    dump(tick_or_candle, index, precision)
+  defp get_precision(enumerable, :auto) do
+    case Enum.take(enumerable, 1) do
+      [] -> :millisecond
+      # Tick or Candle struct
+      [%{time: %DateTime{microsecond: {_, 0}}}] -> :second
+      [%{time: %DateTime{microsecond: {_, 3}}}] -> :millisecond
+      [%{time: %DateTime{microsecond: {_, 6}}}] -> :microsecond
+    end
+  end
+
+  defp get_precision(_enumerable, precision) do
+    precision
   end
 
   defp dump(%Tick{} = tick, _index, precision) do
@@ -130,27 +137,23 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   end
 
   defp load({time, ask, bid, ask_volume, bid_volume}, precision) do
-    %MarketEvent{
-      tick_or_candle: %Tick{
-        time: DateTime.from_unix!(time, precision),
-        ask: ask,
-        bid: bid,
-        ask_volume: ask_volume,
-        bid_volume: bid_volume
-      }
+    %Tick{
+      time: DateTime.from_unix!(time, precision),
+      ask: ask,
+      bid: bid,
+      ask_volume: ask_volume,
+      bid_volume: bid_volume
     }
   end
 
   defp load({_index, time, open, high, low, close, volume}, precision) do
-    %MarketEvent{
-      tick_or_candle: %Candle{
-        time: DateTime.from_unix!(time, precision),
-        open: open,
-        high: high,
-        low: low,
-        close: close,
-        volume: volume
-      }
+    %Candle{
+      time: DateTime.from_unix!(time, precision),
+      open: open,
+      high: high,
+      low: low,
+      close: close,
+      volume: volume
     }
   end
 end

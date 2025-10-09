@@ -2,7 +2,7 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.DataFeeds.TicksCSVDataFeed
-  alias TheoryCraft.{Tick, MarketEvent}
+  alias TheoryCraft.Tick
 
   @fixture_path "test/fixtures/XAUUSD_ticks_dukascopy.csv"
 
@@ -35,10 +35,8 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
       assert Enumerable.impl_for(stream)
 
       # Should be able to consume it
-      first_event = Enum.at(stream, 0)
-      assert %MarketEvent{tick_or_candle: tick_or_candle, data: data} = first_event
-      assert %Tick{} = tick_or_candle
-      assert data == %{}
+      first_tick = Enum.at(stream, 0)
+      assert %Tick{} = first_tick
     end
 
     test "raises on error" do
@@ -66,12 +64,12 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
 
     test "produces Tick events from CSV data" do
       {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
-      assert Enum.all?(stream, &match?(%MarketEvent{tick_or_candle: %Tick{}}, &1))
+      assert Enum.all?(stream, &match?(%Tick{}, &1))
     end
 
     test "correctly parses time field with dukascopy format" do
       {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
-      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
+      first_tick = Enum.at(stream, 0)
 
       # Note: The CSV shows "18.08.2025 00:00:01.154 GMT+0200" but after parsing it's in UTC
       # Adjusted to UTC from GMT+0200
@@ -80,7 +78,7 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
 
     test "correctly parses numeric fields" do
       {:ok, stream} = TicksCSVDataFeed.stream(dukascopy_opts())
-      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
+      first_tick = Enum.at(stream, 0)
 
       # Based on first line of CSV: 3337.675,3336.015,450,450
       assert first_tick.ask == 3337.675
@@ -115,7 +113,7 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeedTest do
       minimal_options = Keyword.merge(dukascopy_opts(), ask_volume: nil, bid_volume: nil)
 
       {:ok, stream} = TicksCSVDataFeed.stream(minimal_options)
-      %MarketEvent{tick_or_candle: first_tick} = Enum.at(stream, 0)
+      first_tick = Enum.at(stream, 0)
 
       # Verify that nil columns are not set
       assert is_nil(first_tick.ask_volume)

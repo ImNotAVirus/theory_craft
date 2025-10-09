@@ -11,7 +11,6 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeed do
   alias NimbleCSV.RFC4180, as: CSV
   alias TheoryCraft.Utils
   alias TheoryCraft.Tick
-  alias TheoryCraft.MarketEvent
 
   ## DataFeed behaviour
 
@@ -26,7 +25,6 @@ defmodule TheoryCraft.DataFeeds.TicksCSVDataFeed do
         |> File.stream!(read_ahead: read_ahead)
         |> CSV.parse_stream(skip_headers: skip_headers)
         |> transform_csv_fun(skip_headers, opts)
-        |> Stream.map(&%MarketEvent{tick_or_candle: &1})
 
       {:ok, stream}
     else

@@ -1,4 +1,4 @@
-# Untitled notebook
+# TheoryCraft
 
 ```elixir
 Mix.install([
@@ -17,9 +17,10 @@ defmodule TheoryCraft.Test do
   Documentation for `TheoryCraft`.
   """
 
+  import TheoryCraft.MarketSimulator
+
+  alias TheoryCraft.MarketSimulator
   alias TheoryCraft.Utils
-  alias TheoryCraft.DataFeeds.{MemoryDataFeed, TicksCSVDataFeed}
-  alias TheoryCraft.Layers.TickToCandleLayer
 
   ## Public API
 
@@ -28,29 +29,23 @@ defmodule TheoryCraft.Test do
     
     filename = "XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
     full_path = Path.join(dir, filename)
-    stream = TicksCSVDataFeed.stream!([file: full_path] ++ dukascopy_opts())
+    opts = dukascopy_opts()
     
     # filename = "ticks_XAUUSD_Minute_20240101_230202_20241231_215859.csv"
     # full_path = Path.join(dir, filename)
-    # stream = TicksCSVDataFeed.stream!([file: full_path] ++ ctrader_opts())
+    # opts = ctrader_opts()
 
-    fun = fn -> MemoryDataFeed.new(stream) end
-    memory_df = time("MemoryDataFeed loading", fun)
-    memory_stream = MemoryDataFeed.stream!(from: memory_df)
-
-    ## Transform data to m5 bars
-    # TODO....
-
-    fun = fn ->
-      memory_stream
-      |> Stream.run()
+    stream =
+      %MarketSimulator{}
+      # |> add_data(memory_stream, name: "ticks")
+      |> add_data_ticks_from_csv(full_path, opts)
+      |> resample("t100", name: "ticks_3")
+      |> stream()
+      |> Enum.take(3)
       |> IO.inspect()
-    end
 
-    time("MemoryDataFeed in memory", fun)
-
-    IO.puts("Close")
-    # :ok = MemoryDataFeed.close(memory_df)
+    count = time("Stream", fn -> Enum.count(stream) end)
+    IO.puts("Count: #{count}")
   end
 
   ## Private functions
@@ -107,11 +102,11 @@ TheoryCraft.Test.test()
 
 
 # %Strategy{}
-# # |> add_data("tick_xauusd.csv", name: "xauusd_ticks")
+# # |> add_data_from_csv("tick_xauusd.csv", name: "xauusd_ticks")
 # |> add_data("tick_xauusd.csv")
 # |> resample("m5")
 # |> resample("D", data: 0, name: "xauusd_daily")
-# |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14")
+# |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, data: "xauusd_daily", name: "sma_14")
 # |> add_indicator(TheoryCraft.Indicators.Supertrend, period: 14, name: "supertrend_14", data: 0)
 # |> add_strategy(TheoryCraft.Strategies.MyStrategy)
 # |> set_balance(100_000)

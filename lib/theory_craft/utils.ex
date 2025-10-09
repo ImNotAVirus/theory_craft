@@ -53,4 +53,20 @@ defmodule TheoryCraft.Utils do
         "#{value}ms"
     end
   end
+
+  def has_behaviour(module, behaviour) do
+    attributes = module.module_info(:attributes)
+
+    attributes
+    |> Keyword.get_values(:behaviour)
+    |> List.flatten()
+    |> Enum.any?(&(&1 == behaviour))
+  end
+
+  def required_opt!(opts, name) do
+    case Keyword.fetch(opts, name) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Missing required option: #{name} in #{inspect(opts)}"
+    end
+  end
 end

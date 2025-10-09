@@ -2,13 +2,15 @@ defmodule TheoryCraft.DataFeed do
   @moduledoc """
   A behaviour for data feeds.
 
-  A data feed is responsible for providing a continuous stream of market events.
+  A data feed is responsible for providing a continuous stream of Ticks or Candles.
   """
 
-  alias TheoryCraft.MarketEvent
+  alias TheoryCraft.{Candle, Tick}
 
-  @callback stream(Keyword.t()) :: {:ok, Enumerable.t(MarketEvent.t())} | {:error, any()}
-  @callback stream!(Keyword.t()) :: Enumerable.t(MarketEvent.t())
+  @callback stream(Keyword.t()) :: {:ok, stream()} | {:error, any()}
+  @callback stream!(Keyword.t()) :: stream()
+
+  @type stream :: Enumerable.t(Tick.t() | Candle.t())
 
   ## Public API
 
