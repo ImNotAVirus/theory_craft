@@ -8,13 +8,13 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "init/1" do
     test "initializes with required options" do
-      opts = [data: "xauusd", timeframe: "t5"]
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
 
       assert {:ok, state} = TickToCandleProcessor.init(opts)
       assert %TickToCandleProcessor{} = state
       assert state.data_name == "xauusd"
       assert state.timeframe == {"t", 5}
-      assert state.name == "xauusd_t5"
+      assert state.name == "xauusd"
       assert state.price_type == :mid
       assert state.fake_volume? == true
       assert state.market_open == ~T[00:00:00]
@@ -30,28 +30,28 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "initializes with custom price_type :bid" do
-      opts = [data: "xauusd", timeframe: "t5", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "t5", price_type: :bid, name: "xauusd"]
 
       assert {:ok, state} = TickToCandleProcessor.init(opts)
       assert state.price_type == :bid
     end
 
     test "initializes with custom price_type :ask" do
-      opts = [data: "xauusd", timeframe: "t5", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "t5", price_type: :ask, name: "xauusd"]
 
       assert {:ok, state} = TickToCandleProcessor.init(opts)
       assert state.price_type == :ask
     end
 
     test "initializes with fake_volume? false" do
-      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false, name: "xauusd"]
 
       assert {:ok, state} = TickToCandleProcessor.init(opts)
       assert state.fake_volume? == false
     end
 
     test "initializes with custom market_open" do
-      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[09:30:00], name: "xauusd"]
 
       assert {:ok, state} = TickToCandleProcessor.init(opts)
       assert state.market_open == ~T[09:30:00]
@@ -76,7 +76,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - first tick (initialization)" do
     test "creates first candle from tick with :mid price" do
-      opts = [data: "xauusd", timeframe: "t5"]
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -98,7 +98,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with :bid price" do
-      opts = [data: "xauusd", timeframe: "t5", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "t5", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -112,7 +112,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with :ask price" do
-      opts = [data: "xauusd", timeframe: "t5", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "t5", price_type: :ask, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -126,7 +126,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with real volume when available" do
-      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick =
@@ -146,7 +146,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with nil volume when fake_volume? is false and no volume" do
-      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "t5", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -159,7 +159,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with fake volume when fake_volume? is true and no volume provided" do
-      opts = [data: "xauusd", timeframe: "t5", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "t5", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -172,7 +172,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle with real volume when fake_volume? is true and volume is provided" do
-      opts = [data: "xauusd", timeframe: "t5", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "t5", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick =
@@ -194,7 +194,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - updating candle within timeframe" do
     setup do
-      opts = [data: "xauusd", timeframe: "t3"]
+      opts = [data: "xauusd", timeframe: "t3", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Process first tick
@@ -243,7 +243,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume when fake_volume? is false" do
-      opts = [data: "xauusd", timeframe: "t3", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "t3", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 =
@@ -274,7 +274,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates real volume when fake_volume? is true and volume is provided" do
-      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 =
@@ -304,7 +304,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "increments by 1.0 when fake_volume? is true and no volume provided" do
-      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -320,7 +320,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "mixes fake and real volume when fake_volume? is true" do
-      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "t3", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # First tick without volume -> fake volume = 1.0
@@ -347,7 +347,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - creating new candle when counter reaches multiplier" do
     test "creates new candle after multiplier ticks" do
-      opts = [data: "xauusd", timeframe: "t3"]
+      opts = [data: "xauusd", timeframe: "t3", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       ticks = build_tick_sequence(4)
@@ -371,7 +371,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - market_open transition" do
     test "creates new candle when crossing market_open time" do
-      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[10:00:00]]
+      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[10:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # First tick before market open (counter = 1)
@@ -411,7 +411,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - edge cases" do
     test "handles tick with only bid price" do
-      opts = [data: "xauusd", timeframe: "t5"]
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = %Tick{
@@ -431,7 +431,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles tick with only ask price" do
-      opts = [data: "xauusd", timeframe: "t5"]
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = %Tick{
@@ -451,7 +451,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "raises error when both bid and ask are nil" do
-      opts = [data: "xauusd", timeframe: "t5"]
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = %Tick{
@@ -470,7 +470,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles mixed volume availability" do
-      opts = [data: "xauusd", timeframe: "t2", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "t2", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # First tick with volume
@@ -498,7 +498,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - monthly timeframes" do
     test "creates first candle aligned on first of month" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick on Jan 17 should align to Jan 1
@@ -514,7 +514,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same month" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-05 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -533,7 +533,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle on next month" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-20 15:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -551,7 +551,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles M with multiplier > 1" do
-      opts = [data: "xauusd", timeframe: "M3", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "M3", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -565,7 +565,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles month overflow (Jan 31 to Feb)" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-31 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -583,7 +583,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume?" do
-      opts = [data: "xauusd", timeframe: "M", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "M", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-10 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -599,7 +599,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles different price types" do
-      opts = [data: "xauusd", timeframe: "M", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "M", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -614,7 +614,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - weekly timeframes" do
     test "creates first candle aligned on Monday market_open by default" do
-      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # 2024-01-17 is a Wednesday, should align to Monday 2024-01-15
@@ -630,7 +630,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle aligned on Sunday when weekly_open: :sunday" do
-      opts = [data: "xauusd", timeframe: "W", weekly_open: :sunday, market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "W", weekly_open: :sunday, market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # 2024-01-17 is a Wednesday, should align to Sunday 2024-01-14
@@ -646,7 +646,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same week" do
-      opts = [data: "xauusd", timeframe: "W", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -665,7 +665,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle on next week" do
-      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-17 15:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -683,7 +683,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles W with multiplier > 1" do
-      opts = [data: "xauusd", timeframe: "W2", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "W2", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -697,7 +697,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume?" do
-      opts = [data: "xauusd", timeframe: "W", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "W", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -713,7 +713,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles different price types" do
-      opts = [data: "xauusd", timeframe: "W", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "W", price_type: :ask, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-17 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -728,7 +728,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - daily timeframes" do
     test "creates first candle aligned on market_open" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick at 15:45 should align to 09:30:00 same day
@@ -744,7 +744,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same day" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-15 10:30:00Z], bid: 2000.0, ask: 2002.0)
@@ -764,7 +764,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle on next day" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-15 15:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -782,7 +782,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles D with multiplier > 1" do
-      opts = [data: "xauusd", timeframe: "D3", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "D3", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -796,7 +796,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume?" do
-      opts = [data: "xauusd", timeframe: "D", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "D", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -812,7 +812,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles different price types" do
-      opts = [data: "xauusd", timeframe: "D", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "D", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-15 10:00:00Z], bid: 2000.0, ask: 2002.0)
@@ -827,7 +827,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - hour-based timeframes" do
     test "creates first candle with aligned time" do
-      opts = [data: "xauusd", timeframe: "h4"]
+      opts = [data: "xauusd", timeframe: "h4", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick at 11:23:45 should align to 08:00:00 for h4
@@ -843,7 +843,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same timeframe period" do
-      opts = [data: "xauusd", timeframe: "h1"]
+      opts = [data: "xauusd", timeframe: "h1", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:17:30Z], bid: 2000.0, ask: 2002.0)
@@ -863,7 +863,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle when crossing timeframe boundary" do
-      opts = [data: "xauusd", timeframe: "h4"]
+      opts = [data: "xauusd", timeframe: "h4", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:30:00Z], bid: 2000.0, ask: 2002.0)
@@ -882,7 +882,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles h1 (1 hour) timeframe" do
-      opts = [data: "xauusd", timeframe: "h1"]
+      opts = [data: "xauusd", timeframe: "h1", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -896,7 +896,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume?" do
-      opts = [data: "xauusd", timeframe: "h1", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "h1", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:12:30Z], bid: 2000.0, ask: 2002.0)
@@ -912,7 +912,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates real volume when provided" do
-      opts = [data: "xauusd", timeframe: "h1", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "h1", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 =
@@ -942,7 +942,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :bid price type" do
-      opts = [data: "xauusd", timeframe: "h1", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "h1", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -955,7 +955,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :ask price type" do
-      opts = [data: "xauusd", timeframe: "h1", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "h1", price_type: :ask, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -970,7 +970,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - minute-based timeframes" do
     test "creates first candle with aligned time" do
-      opts = [data: "xauusd", timeframe: "m5"]
+      opts = [data: "xauusd", timeframe: "m5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick at 10:23:45 should align to 10:20:00 for m5
@@ -986,7 +986,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same timeframe period" do
-      opts = [data: "xauusd", timeframe: "m15"]
+      opts = [data: "xauusd", timeframe: "m15", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:17:30Z], bid: 2000.0, ask: 2002.0)
@@ -1006,7 +1006,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle when crossing timeframe boundary" do
-      opts = [data: "xauusd", timeframe: "m5"]
+      opts = [data: "xauusd", timeframe: "m5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:22:30Z], bid: 2000.0, ask: 2002.0)
@@ -1025,7 +1025,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles m1 (1 minute) timeframe" do
-      opts = [data: "xauusd", timeframe: "m1"]
+      opts = [data: "xauusd", timeframe: "m1", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -1039,7 +1039,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume?" do
-      opts = [data: "xauusd", timeframe: "m5", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "m5", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:12:30Z], bid: 2000.0, ask: 2002.0)
@@ -1055,7 +1055,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates real volume when provided" do
-      opts = [data: "xauusd", timeframe: "m5", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "m5", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 =
@@ -1085,7 +1085,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :bid price type" do
-      opts = [data: "xauusd", timeframe: "m5", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "m5", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -1098,7 +1098,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :ask price type" do
-      opts = [data: "xauusd", timeframe: "m5", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "m5", price_type: :ask, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
@@ -1113,7 +1113,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - second-based timeframes" do
     test "creates first candle with aligned time" do
-      opts = [data: "xauusd", timeframe: "s5"]
+      opts = [data: "xauusd", timeframe: "s5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick at 10:00:23 should align to 10:00:20 for s5
@@ -1129,7 +1129,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "updates candle within same timeframe period" do
-      opts = [data: "xauusd", timeframe: "s10"]
+      opts = [data: "xauusd", timeframe: "s10", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:00:12Z], bid: 2000.0, ask: 2002.0)
@@ -1149,7 +1149,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates new candle when crossing timeframe boundary" do
-      opts = [data: "xauusd", timeframe: "s5"]
+      opts = [data: "xauusd", timeframe: "s5", name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:00:22Z], bid: 2000.0, ask: 2002.0)
@@ -1168,7 +1168,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :bid price type" do
-      opts = [data: "xauusd", timeframe: "s15", price_type: :bid]
+      opts = [data: "xauusd", timeframe: "s15", price_type: :bid, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:23Z], bid: 2000.0, ask: 2002.0)
@@ -1181,7 +1181,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles :ask price type" do
-      opts = [data: "xauusd", timeframe: "s30", price_type: :ask]
+      opts = [data: "xauusd", timeframe: "s30", price_type: :ask, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick = build_tick(~U[2024-01-01 10:00:23Z], bid: 2000.0, ask: 2002.0)
@@ -1194,7 +1194,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates volume with fake_volume? true" do
-      opts = [data: "xauusd", timeframe: "s5", fake_volume?: true]
+      opts = [data: "xauusd", timeframe: "s5", fake_volume?: true, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 = build_tick(~U[2024-01-01 10:00:12Z], bid: 2000.0, ask: 2002.0)
@@ -1210,7 +1210,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "accumulates real volume when provided" do
-      opts = [data: "xauusd", timeframe: "s5", fake_volume?: false]
+      opts = [data: "xauusd", timeframe: "s5", fake_volume?: false, name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       tick1 =
@@ -1242,7 +1242,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
   describe "next/2 - different timezones support" do
     test "handles daily timeframe with Europe/Paris timezone" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Create a tick in Europe/Paris timezone
@@ -1266,7 +1266,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles weekly timeframe with America/New_York timezone" do
-      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "W", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # 2024-01-17 is a Wednesday, should align to Monday 2024-01-15
@@ -1290,7 +1290,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles monthly timeframe with Europe/Paris timezone" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # Tick on Jan 17 should align to Jan 1 in Europe/Paris
@@ -1314,7 +1314,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles crossing month boundary with America/New_York timezone" do
-      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "M", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # First tick in January
@@ -1342,7 +1342,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "preserves timezone across candle updates" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[00:00:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # First tick creates candle
@@ -1370,7 +1370,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "handles DST transitions correctly" do
-      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00]]
+      opts = [data: "xauusd", timeframe: "D", market_open: ~T[09:30:00], name: "xauusd"]
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # March 31, 2024 is DST transition in Europe/Paris (UTC+1 -> UTC+2)
@@ -1393,6 +1393,116 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
 
       assert new_state.next_time.time_zone == "Europe/Paris"
       assert DateTime.to_date(new_state.next_time) == ~D[2024-04-02]
+    end
+  end
+
+  describe "next/2 - output name vs input data" do
+    test "writes candles to 'name' key, not 'data' key (tick timeframe)" do
+      opts = [data: "xauusd_ticks", timeframe: "t3", name: "xauusd_t3"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd_ticks" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      # Input ticks should still be present
+      assert %Tick{} = new_event.data["xauusd_ticks"]
+
+      # Output candles should be in the name key
+      assert %Candle{} = new_event.data["xauusd_t3"]
+      assert new_event.data["xauusd_t3"].open == 2001.0
+    end
+
+    test "writes candles to 'name' key, not 'data' key (minute timeframe)" do
+      opts = [data: "eurusd_ticks", timeframe: "m5", name: "eurusd_m5"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 1.0850, ask: 1.0852)
+      event = %MarketEvent{data: %{"eurusd_ticks" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      # Input ticks should still be present
+      assert %Tick{} = new_event.data["eurusd_ticks"]
+
+      # Output candles should be in the name key
+      assert %Candle{} = new_event.data["eurusd_m5"]
+      assert new_event.data["eurusd_m5"].time == ~U[2024-01-01 10:20:00Z]
+      assert new_event.data["eurusd_m5"].open == 1.0851
+    end
+
+    test "uses default name when not specified" do
+      opts = [data: "btcusd", timeframe: "h1"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      assert state.name == "btcusd_h1"
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 50000.0, ask: 50010.0)
+      event = %MarketEvent{data: %{"btcusd" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      # Input ticks should still be present
+      assert %Tick{} = new_event.data["btcusd"]
+
+      # Output candles should be in the default name key
+      assert %Candle{} = new_event.data["btcusd_h1"]
+    end
+
+    test "preserves both tick and candle data across updates" do
+      opts = [data: "gold_ticks", timeframe: "t2", name: "gold_t2"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick
+      tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"gold_ticks" => tick1}}
+      {:ok, event_after_first, state} = TickToCandleProcessor.next(event1, state)
+
+      # Both should be present
+      assert %Tick{} = event_after_first.data["gold_ticks"]
+      assert %Candle{} = event_after_first.data["gold_t2"]
+
+      # Second tick (updates candle)
+      tick2 = build_tick(~U[2024-01-01 10:00:01Z], bid: 2003.0, ask: 2005.0)
+      event2 = %MarketEvent{data: %{"gold_ticks" => tick2}}
+      {:ok, event_after_second, _state} = TickToCandleProcessor.next(event2, state)
+
+      # Both should still be present
+      assert %Tick{} = event_after_second.data["gold_ticks"]
+      assert event_after_second.data["gold_ticks"].bid == 2003.0
+
+      assert %Candle{} = event_after_second.data["gold_t2"]
+      assert event_after_second.data["gold_t2"].close == 2004.0
+    end
+
+    test "works with daily timeframe" do
+      opts = [data: "spy_ticks", timeframe: "D", name: "spy_daily", market_open: ~T[09:30:00]]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-15 15:45:30Z], bid: 480.0, ask: 480.5)
+      event = %MarketEvent{data: %{"spy_ticks" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      # Both should be present
+      assert %Tick{} = new_event.data["spy_ticks"]
+      assert %Candle{} = new_event.data["spy_daily"]
+      assert new_event.data["spy_daily"].time == ~U[2024-01-15 09:30:00Z]
+    end
+
+    test "allows same value for data and name (overwrites input)" do
+      opts = [data: "xauusd", timeframe: "m5", name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+
+      # Should have overwritten the tick with the candle
+      assert %Candle{} = new_event.data["xauusd"]
+      refute match?(%Tick{}, new_event.data["xauusd"])
     end
   end
 

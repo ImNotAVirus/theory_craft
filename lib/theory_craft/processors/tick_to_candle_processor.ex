@@ -159,9 +159,9 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   - **Time-based timeframes** (`s`, `m`, `h`, `D`, `W`, `M`): Creates candles aligned to
     timeframe boundaries. Starts a new candle when the tick's time crosses the `next_time`.
 
-  The function updates the MarketEvent by replacing the Tick data with Candle data using
-  the same data stream name. The candle is continuously updated with each tick until a
-  new candle period begins.
+  The function reads Tick data from the `:data` key in the MarketEvent and writes the generated
+  Candle data to the `:name` key. This allows the input ticks and output candles to coexist in
+  the event's data map. If `:name` equals `:data`, the ticks will be overwritten by the candles.
 
   ## Behavior
 
@@ -172,25 +172,34 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   ## Examples
 
       # Processing first tick (5-minute timeframe)
+      # By default, name is "eurusd_m5" when data is "eurusd"
       event = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:07:30Z], bid: 1.0850, ask: 1.0852}}}
       {:ok, state} = TickToCandleProcessor.init(data: "eurusd", timeframe: "m5")
       {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
-      # new_event.data["eurusd"] is a Candle at time 10:05:00 with OHLC = 1.0851
+      # new_event.data["eurusd_m5"] is a Candle at time 10:05:00 with OHLC = 1.0851
+      # new_event.data["eurusd"] still contains the original Tick
 
       # Processing tick within same period
       event2 = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:08:00Z], bid: 1.0855, ask: 1.0857}}}
       {:ok, new_event2, new_state2} = TickToCandleProcessor.next(event2, new_state)
-      # new_event2.data["eurusd"] updates the same candle with new high/close
+      # new_event2.data["eurusd_m5"] updates the same candle with new high/close
 
       # Crossing boundary creates new candle
       event3 = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:10:00Z], bid: 1.0860, ask: 1.0862}}}
       {:ok, new_event3, new_state3} = TickToCandleProcessor.next(event3, new_state2)
-      # new_event3.data["eurusd"] is a NEW Candle at time 10:10:00
+      # new_event3.data["eurusd_m5"] is a NEW Candle at time 10:10:00
+
+      # Using explicit name to preserve both ticks and candles
+      {:ok, state} = TickToCandleProcessor.init(data: "xauusd_ticks", timeframe: "h1", name: "xauusd_h1")
+      # Input: event.data["xauusd_ticks"] contains Tick
+      # Output: event.data["xauusd_h1"] will contain Candle
+      # Both coexist in the same MarketEvent
   """
   @impl true
   @spec next(MarketEvent.t(), t()) :: {:ok, MarketEvent.t(), t()}
   def next(event, %TickToCandleProcessor{timeframe: {"t", _mult}, tick_counter: nil} = state) do
     %TickToCandleProcessor{
+      name: name,
       data_name: data_name,
       price_type: price_type,
       fake_volume?: fake_volume?
@@ -199,7 +208,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     tick = market_data_tick!(event, data_name)
     candle = candle_from_tick(tick, price_type, fake_volume?)
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, data_name, candle)}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
     updated_state = %TickToCandleProcessor{state | tick_counter: 1, current_candle: candle}
 
     {:ok, updated_event, updated_state}
@@ -208,6 +217,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   @impl true
   def next(event, %TickToCandleProcessor{timeframe: {"t", _mult}} = state) do
     %TickToCandleProcessor{
+      name: name,
       data_name: data_name,
       price_type: price_type,
       current_candle: current_candle,
@@ -224,7 +234,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
         false -> update_candle_from_tick(current_candle, tick, price_type, fake_volume?)
       end
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, data_name, candle)}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
 
     updated_state = %TickToCandleProcessor{
       state
@@ -240,6 +250,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   def next(event, %TickToCandleProcessor{timeframe: {unit, _mult}, next_time: nil} = state)
       when unit in ["s", "m", "h", "D", "W", "M"] do
     %TickToCandleProcessor{
+      name: name,
       data_name: data_name,
       price_type: price_type,
       fake_volume?: fake_volume?,
@@ -251,7 +262,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     candle = %Candle{candle_from_tick(tick, price_type, fake_volume?) | time: aligned_time}
     next_time = add_timeframe(aligned_time, timeframe)
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, data_name, candle)}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
     updated_state = %TickToCandleProcessor{state | next_time: next_time, current_candle: candle}
 
     {:ok, updated_event, updated_state}
@@ -262,6 +273,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   def next(event, %TickToCandleProcessor{timeframe: {unit, _mult}} = state)
       when unit in ["s", "m", "h", "D", "W", "M"] do
     %TickToCandleProcessor{
+      name: name,
       data_name: data_name,
       price_type: price_type,
       current_candle: current_candle,
@@ -289,7 +301,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
           {updated_candle, state.next_time}
       end
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, data_name, candle)}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
     updated_state = %TickToCandleProcessor{state | next_time: next_time, current_candle: candle}
 
     {:ok, updated_event, updated_state}
