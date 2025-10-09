@@ -39,7 +39,7 @@ defmodule TheoryCraft.Test do
       %MarketSimulator{}
       # |> add_data(memory_stream, name: "ticks")
       |> add_data_ticks_from_csv(full_path, opts)
-      |> resample("t100", name: "ticks_3")
+      |> resample("D", data: "XAUUSD", name: "XAUUSD_daily")
       |> stream()
       |> Enum.take(3)
       |> IO.inspect()
@@ -52,6 +52,7 @@ defmodule TheoryCraft.Test do
 
   defp dukascopy_opts() do
     [
+      name: "XAUUSD",
       time: "Local time",
       ask: "Ask",
       bid: "Bid",
@@ -64,6 +65,7 @@ defmodule TheoryCraft.Test do
 
   defp ctrader_opts() do
     [
+      name: "XAUUSD",
       time: "Timestamp",
       ask: "Ask",
       bid: "Bid",
