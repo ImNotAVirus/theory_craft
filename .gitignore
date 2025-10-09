@@ -23,3 +23,5 @@ theory_craft-*.tar
 /tmp/
 
 /.vscode/tasks.json
+
+/.claude/
