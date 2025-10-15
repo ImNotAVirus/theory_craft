@@ -7,6 +7,7 @@ defmodule TheoryCraft.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       aliases: aliases(),
       elixirc_options: [warnings_as_errors: true]
@@ -28,16 +29,22 @@ defmodule TheoryCraft.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps() do
     [
       {:nimble_csv, "~> 1.3"},
       {:nimble_parsec, "~> 1.4"},
-      {:tzdata, "~> 1.1", only: :test},
+      {:gen_stage, "~> 1.3"},
 
-      ## AI agent
+      ## Dev
       {:tidewave, "~> 0.5", only: :dev},
-      {:bandit, "~> 1.0", only: :dev}
+      {:bandit, "~> 1.0", only: :dev},
+
+      ## Tests
+      {:tzdata, "~> 1.1", only: :test}
     ]
   end
 end

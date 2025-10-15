@@ -121,9 +121,10 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
       iex> TickToCandleProcessor.init(data: "xauusd", timeframe: "D", price_type: :bid)
       {:ok, %TickToCandleProcessor{data_name: "xauusd", price_type: :bid, ...}}
+
   """
   @impl true
-  @spec init(keyword()) :: {:ok, t()}
+  @spec init(Keyword.t()) :: {:ok, t()}
   def init(opts) do
     data_name = Utils.required_opt!(opts, :data)
     timeframe_from_user = Utils.required_opt!(opts, :timeframe)
@@ -194,6 +195,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
       # Input: event.data["xauusd_ticks"] contains Tick
       # Output: event.data["xauusd_h1"] will contain Candle
       # Both coexist in the same MarketEvent
+
   """
   @impl true
   @spec next(MarketEvent.t(), t()) :: {:ok, MarketEvent.t(), t()}

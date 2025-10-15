@@ -119,9 +119,122 @@ lib/theory_craft/
     └── tick_to_candle_processor.ex  # Tick resampling
 ```
 
+## Dependencies
+
+- `nimble_csv`: CSV parsing for data feeds
+- `nimble_parsec`: Parser combinators (future use)
+
 ## Coding Guidelines
 
 ### Elixir Best Practices
+
+#### Module Structure and Organization
+
+1. **Follow consistent module structure**
+   - Every module must follow this format with proper ordering and spacing
+   - Order: `use` → `require` → `import` → `alias`
+   - Separate sections with comments and blank lines
+   - Example:
+     ```elixir
+     defmodule KinoTheoryCraft.TheoryCraftCell do
+       @moduledoc """
+       Smart cell implementation for TheoryCraft integration.
+
+       Provides an interactive UI for configuring and executing
+       TheoryCraft data processing tasks in Livebook.
+       """
+
+       use Kino.JS, assets_path: "lib/assets/theory_craft_cell", entrypoint: "build/main.js"
+       use Kino.JS.Live
+       use Kino.SmartCell, name: "TheoryCraft"
+
+       require Logger
+
+       import TheoryCraft.TimeFrame
+
+       alias TheoryCraft.MarketSimulator
+       alias TheoryCraft.Processor
+
+       ## Module attributes
+
+       @task_groups [...]
+
+       ## Public API
+
+       @doc """
+       Initializes the smart cell state from saved attributes.
+       """
+       @spec init(map(), Kino.JS.Live.Context.t()) :: {:ok, Kino.JS.Live.Context.t()}
+       def init(attrs, ctx) do
+         # ...
+       end
+
+       ## Internal use ONLY
+
+       @doc false
+       @spec field_defaults_for(String.t()) :: map()
+       def field_defaults_for(task_id) do
+         # ...
+       end
+
+       ## Private functions
+
+       defp task_groups(), do: @task_groups
+
+       defp tasks(), do: Enum.flat_map(task_groups(), & &1.tasks)
+     end
+     ```
+
+2. **Never use multiline tuples**
+   - Tuples should always be on a single line
+   - For complex return values, assign to a variable first, then return
+   - This improves readability and makes the return value explicit
+   - Example:
+     ```elixir
+     # ❌ Bad - multiline tuple
+     def handle_connect(ctx) do
+       {:ok,
+        %{
+          fields: ctx.assigns.fields,
+          task_groups: task_groups(),
+          input_variables: ctx.assigns.input_variables
+        }, ctx}
+     end
+
+     # ✅ Good - assign to variable first
+     def handle_connect(ctx) do
+       payload = %{
+         fields: ctx.assigns.fields,
+         task_groups: task_groups(),
+         input_variables: ctx.assigns.input_variables
+       }
+
+       {:ok, payload, ctx}
+     end
+     ```
+
+     ```elixir
+     # ❌ Bad - multiline tuple in init
+     def init(attrs, ctx) do
+       {:ok,
+        assign(ctx,
+          fields: fields,
+          input_variables: [],
+          task_groups: task_groups()
+        )}
+     end
+
+     # ✅ Good - assign to variable first
+     def init(attrs, ctx) do
+       new_ctx = assign(ctx,
+         fields: fields,
+         input_variables: [],
+         task_groups: task_groups()
+       )
+
+       {:ok, new_ctx}
+     end
+     ```
 
 #### DateTime and Struct Manipulation
 
@@ -402,6 +515,199 @@ lib/theory_craft/
      end
      ```
 
+9. **End documentation examples with a blank line**
+   - When `@doc` or `@moduledoc` blocks end with examples (code snippets or `iex>` blocks), always add a blank line before the closing `"""`
+   - This improves visual separation and readability
+   - Example:
+     ```elixir
+     # ❌ Bad - no blank line before closing
+     @doc """
+     Processes a market event.
+
+     ## Examples
+
+         iex> process(event)
+         {:ok, result}
+     """
+
+     # ✅ Good - blank line before closing
+     @doc """
+     Processes a market event.
+
+     ## Examples
+
+         iex> process(event)
+         {:ok, result}
+
+     """
+     ```
+
+     ```elixir
+     # Note: if examples are NOT at the end, no blank line is needed
+     @doc """
+     Processes a market event.
+
+     ## Examples
+
+         iex> process(event)
+         {:ok, result}
+
+     ## Additional Notes
+
+     This function handles errors gracefully.
+     """
+     ```
+
+### Test Organization and Readability
+
+1. **Follow consistent test module structure**
+   - Test modules must follow a consistent structure with section comments
+   - Use `## Setup` for the setup/setup_all section
+   - Use `## Tests` for the test section
+   - Example:
+     ```elixir
+     defmodule TheoryCraft.SomeModuleTest do
+       use ExUnit.Case, async: true
+
+       alias TheoryCraft.SomeModule
+
+       ## Setup
+
+       setup do
+         # Setup code
+         {:ok, some_data: data}
+       end
+
+       ## Tests
+
+       describe "some functionality" do
+         test "does something", %{some_data: data} do
+           # Test code
+         end
+       end
+
+       ## Private helper functions
+
+       defp build_test_data do
+         # Helper code
+       end
+     end
+     ```
+
+2. **Extract large data structures into private helper functions**
+   - Tests must be clear and readable
+   - Large lists, complex structs, or repeated test data should be extracted into private helper functions
+   - This keeps the test body focused on the actual test logic
+   - Example:
+     ```elixir
+     # ❌ Bad - large list clutters the setup
+     setup do
+       ticks = [
+         %Tick{
+           time: ~U[2024-01-01 00:00:00.000000Z],
+           ask: 2500.0,
+           bid: 2499.0,
+           ask_volume: 100.0,
+           bid_volume: 150.0
+         },
+         %Tick{
+           time: ~U[2024-01-01 00:01:00.000000Z],
+           ask: 2501.0,
+           bid: 2500.0,
+           ask_volume: 100.0,
+           bid_volume: 150.0
+         },
+         # ... 20 more ticks ...
+       ]
+
+       {:ok, ticks: ticks}
+     end
+
+     # ✅ Good - extracted to private helper function
+     setup do
+       ticks = build_test_ticks()
+       {:ok, ticks: ticks}
+     end
+
+     # Private helper functions
+
+     defp build_test_ticks do
+       [
+         %Tick{
+           time: ~U[2024-01-01 00:00:00.000000Z],
+           ask: 2500.0,
+           bid: 2499.0,
+           ask_volume: 100.0,
+           bid_volume: 150.0
+         },
+         %Tick{
+           time: ~U[2024-01-01 00:01:00.000000Z],
+           ask: 2501.0,
+           bid: 2500.0,
+           ask_volume: 100.0,
+           bid_volume: 150.0
+         },
+         # ... 20 more ticks ...
+       ]
+     end
+     ```
+
+   - This also allows reusing the same data in multiple test files
+   - For very common test data, consider creating a test support module (e.g., `test/support/fixtures.ex`)
+
+3. **Refactor repeated code into private helper functions**
+   - Tests must be clear and concise
+   - When the same code pattern is repeated multiple times in tests, extract it into a private helper function
+   - **IMPORTANT**: NEVER refactor calls to the module being tested - always keep these in the test functions themselves
+   - Only refactor calls to other modules (dependencies, setup code, etc.)
+   - This makes tests easier to read and maintain while keeping the tested functionality visible
+   - Example:
+     ```elixir
+     # In ProcessorStageTest - testing ProcessorStage module
+
+     # ❌ Bad - refactoring calls to the module being tested
+     test "test 1" do
+       processor = start_processor_stage(opts)  # ❌ Don't extract ProcessorStage calls
+       # ...
+     end
+
+     # ✅ Good - keep calls to module being tested in the test
+     test "test 1" do
+       producer = start_producer(tick_feed)  # ✅ Helper for DataFeedStage (dependency)
+
+       {:ok, processor} =
+         ProcessorStage.start_link(  # ✅ Direct call to module being tested
+           {TickToCandleProcessor, [data: "xauusd", timeframe: "m5", name: "xauusd"]},
+           subscribe_to: [producer]
+         )
+       # ...
+     end
+
+     ## Private functions
+
+     # ✅ Good - helper for dependency module
+     defp start_producer(feed, name \\ "xauusd") do
+       {:ok, producer} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: name)
+       producer
+     end
+     ```
+
+     ```elixir
+     # In DataFeedStageTest - testing DataFeedStage module
+
+     # ❌ Bad - refactoring calls to the module being tested
+     defp start_data_feed_stage(feed) do
+       {:ok, stage} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: "xauusd")
+       stage
+     end
+
+     # ✅ Good - keep DataFeedStage calls directly in tests
+     test "test 1" do
+       {:ok, stage} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: "xauusd")
+       # ...
+     end
+     ```
+
 ### Code Formatting
 
 **Always run `mix format` on modified Elixir files when finished**
@@ -418,8 +724,3 @@ lib/theory_craft/
   # Or format all Elixir files in the project
   mix format
   ```
-
-## Dependencies
-
-- `nimble_csv`: CSV parsing for data feeds
-- `nimble_parsec`: Parser combinators (future use)

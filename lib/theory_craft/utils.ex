@@ -6,6 +6,39 @@ defmodule TheoryCraft.Utils do
 
   ## Public API
 
+  @doc """
+  Normalizes a spec to a `{module, opts}` tuple.
+
+  A spec can be either:
+  - A module atom (e.g., `MyModule`) → normalized to `{MyModule, []}`
+  - A tuple `{module, opts}` → returned as-is
+
+  ## Parameters
+
+    - `spec`: Either a module atom or a `{module, opts}` tuple
+
+  ## Returns
+
+  A `{module, opts}` tuple
+
+  ## Examples
+
+      iex> TheoryCraft.Utils.normalize_spec(MyModule)
+      {MyModule, []}
+
+      iex> TheoryCraft.Utils.normalize_spec({MyModule, [option: :value]})
+      {MyModule, [option: :value]}
+
+  """
+  @spec normalize_spec(module() | {module(), Keyword.t()}) :: {module(), Keyword.t()}
+  def normalize_spec(spec) do
+    case spec do
+      module when is_atom(module) -> {module, []}
+      {module, opts} = tuple when is_atom(module) and is_list(opts) -> tuple
+      _ -> raise ArgumentError, "Invalid spec: #{inspect(spec)}"
+    end
+  end
+
   def genserver_opts(opts) do
     Keyword.take(opts, ~w(debug name timeout spawn_opt hibernate_after)a)
   end

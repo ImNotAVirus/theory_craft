@@ -90,6 +90,13 @@ defmodule TheoryCraft.DataFeed do
   alias TheoryCraft.{Candle, Tick}
 
   @typedoc """
+  A DataFeed specification as a tuple of module and options, or just a module.
+
+  When only the module is provided, options is an empty list.
+  """
+  @type spec :: {module(), Keyword.t()} | module()
+
+  @typedoc """
   A stream of market data (Ticks or Candles).
 
   The stream must be:
@@ -171,6 +178,7 @@ defmodule TheoryCraft.DataFeed do
 
         {:ok, stream}
       end
+
   """
   @callback stream(Keyword.t()) :: {:ok, stream()} | {:error, any()}
 
@@ -205,6 +213,7 @@ defmodule TheoryCraft.DataFeed do
       # This will raise if the file doesn't exist
       stream = MyDataFeed.stream!(path: "nonexistent.csv")
       # ** (ArgumentError) Failed to create stream: :enoent
+
   """
   @callback stream!(Keyword.t()) :: stream()
 

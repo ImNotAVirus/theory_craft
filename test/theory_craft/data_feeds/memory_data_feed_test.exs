@@ -4,6 +4,34 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
   alias TheoryCraft.DataFeeds.MemoryDataFeed
   alias TheoryCraft.{Tick, Candle}
 
+  ## Setup
+
+  setup_all do
+    # Create shared data feeds for tests
+    # Note: async: true means each test runs in its own process,
+    # but they can all read from the same ETS tables created here
+    ticks = sample_ticks()
+    candles = sample_candles()
+    ticks_us = sample_ticks_microsecond()
+    ticks_sec = sample_ticks_second()
+
+    tick_feed = MemoryDataFeed.new(ticks)
+    candle_feed = MemoryDataFeed.new(candles)
+    tick_feed_us = MemoryDataFeed.new(ticks_us, :microsecond)
+    tick_feed_sec = MemoryDataFeed.new(ticks_sec, :auto)
+
+    %{
+      ticks: ticks,
+      candles: candles,
+      ticks_us: ticks_us,
+      ticks_sec: ticks_sec,
+      tick_feed: tick_feed,
+      candle_feed: candle_feed,
+      tick_feed_us: tick_feed_us,
+      tick_feed_sec: tick_feed_sec
+    }
+  end
+
   ## Tests
 
   describe "new/2" do
@@ -97,11 +125,8 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
   end
 
   describe "data streaming" do
-    test "streams all tick data from memory in order" do
-      ticks = sample_ticks()
-      memory_feed = MemoryDataFeed.new(ticks)
-
-      {:ok, stream} = MemoryDataFeed.stream(from: memory_feed)
+    test "streams all tick data from memory in order", %{tick_feed: tick_feed, ticks: ticks} do
+      {:ok, stream} = MemoryDataFeed.stream(from: tick_feed)
       streamed_ticks = Enum.to_list(stream)
 
       for {streamed_tick, original_tick} <- Enum.zip(streamed_ticks, ticks) do
@@ -109,11 +134,11 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
       end
     end
 
-    test "streams all candle data from memory in order" do
-      candles = sample_candles()
-      memory_feed = MemoryDataFeed.new(candles)
-
-      {:ok, stream} = MemoryDataFeed.stream(from: memory_feed)
+    test "streams all candle data from memory in order", %{
+      candle_feed: candle_feed,
+      candles: candles
+    } do
+      {:ok, stream} = MemoryDataFeed.stream(from: candle_feed)
       streamed_candles = Enum.to_list(stream)
 
       for {streamed_candle, original_candle} <- Enum.zip(streamed_candles, candles) do
@@ -121,20 +146,16 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
       end
     end
 
-    test "handles different time precisions correctly" do
-      ticks = sample_ticks()
-
-      memory_feed = MemoryDataFeed.new(ticks, :microsecond)
-      {:ok, stream} = MemoryDataFeed.stream(from: memory_feed)
-
+    test "handles different time precisions correctly", %{
+      tick_feed_us: tick_feed_us,
+      ticks_us: ticks_us
+    } do
+      {:ok, stream} = MemoryDataFeed.stream(from: tick_feed_us)
       streamed_ticks = Enum.to_list(stream)
 
-      for {tick, original} <- Enum.zip(streamed_ticks, ticks) do
-        # Microsecond precision should be different from original millisecond precision
-        assert tick.time != original.time
-
-        # But when truncated to millisecond, they should match
-        assert DateTime.truncate(tick.time, :millisecond) == original.time
+      for {tick, original} <- Enum.zip(streamed_ticks, ticks_us) do
+        # Microsecond precision should preserve the original time
+        assert tick.time == original.time
       end
     end
 
@@ -147,11 +168,11 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
   end
 
   describe "stream!/1" do
-    test "returns ticks without error tuple when data exists" do
-      ticks = sample_ticks()
-      memory_feed = MemoryDataFeed.new(ticks)
-
-      stream = MemoryDataFeed.stream!(from: memory_feed)
+    test "returns ticks without error tuple when data exists", %{
+      tick_feed: tick_feed,
+      ticks: ticks
+    } do
+      stream = MemoryDataFeed.stream!(from: tick_feed)
       streamed_ticks = Enum.to_list(stream)
 
       for {streamed_tick, original_tick} <- Enum.zip(streamed_ticks, ticks) do

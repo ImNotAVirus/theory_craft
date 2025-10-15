@@ -1,15 +1,20 @@
 # TheoryCraft
 
 ```elixir
-Mix.install([
-  {:tzdata, "~> 1.1"},
-  {:theory_craft, path: "D:/Documents/Dev/Elixir/theorycraft"}
-])
+Mix.install(
+  [
+    {:tzdata, "~> 1.1"},
+    {:theory_craft, path: "D:/Documents/Dev/Elixir/theorycraft", override: true},
+    {:kino_theory_craft,
+     path: "D:/Documents/Dev/Elixir/theorycraft/.deps/kino_theory_craft"}
+  ],
+  consolidate_protocols: false
+)
 
 Application.put_env(:elixir, :time_zone_database, Tzdata.TimeZoneDatabase)
 ```
 
-## Section
+## TheoryCraft
 
 ```elixir
 defmodule TheoryCraft.Test do
@@ -113,4 +118,138 @@ TheoryCraft.Test.test()
 # |> add_strategy(TheoryCraft.Strategies.MyStrategy)
 # |> set_balance(100_000)
 # |> set_commission(0.001)
+```
+
+<!-- livebook:{"attrs":"e30","chunks":[],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
+
+```elixir
+
+```
+
+## KinoTheoryCraft
+
+```elixir
+alias TheoryCraft.DataFeeds.TicksCSVDataFeed
+
+filename = "D:/Documents/Dev/trading/python/data/XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
+
+opts = [
+  file: filename,
+  name: "XAUUSD",
+  time: "Local time",
+  ask: "Ask",
+  bid: "Bid",
+  ask_volume: "AskVolume",
+  bid_volume: "BidVolume",
+  skip_headers: false,
+  time_format: :dukascopy
+]
+
+input_file = 
+  opts
+  |> TicksCSVDataFeed.stream!()
+  |> KinoTheoryCraft.Input.stream(name: Path.basename(filename))
+```
+
+<!-- livebook:{"attrs":"eyJpbnB1dF92YXJpYWJsZSI6ImlucHV0X2ZpbGUiLCJ0YXNrX2lkIjoicmVzYW1wbGUiLCJ0aW1lZnJhbWVfbXVsdGlwbGllciI6NSwidGltZWZyYW1lX3VuaXQiOiJtIiwidGltZXpvbmUiOiJFdXJvcGUvUGFyaXMifQ","chunks":[[0,2514]],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
+
+```elixir
+alias KinoTheoryCraft.Control.{Chart, ChartController, Streamer}
+alias TheoryCraft.MarketSimulator
+chart = Chart.new([], "Europe/Paris" || "Etc/UTC")
+initial_speed = 100
+controller = ChartController.new(speed: initial_speed, status: :paused)
+input = input_file
+timeframe = "m5"
+{:ok, streamer_ref} = Agent.start_link(fn -> nil end)
+{:ok, speed_ref} = Agent.start_link(fn -> initial_speed end)
+
+create_streamer = fn speed ->
+  resampled_stream =
+    %MarketSimulator{}
+    |> MarketSimulator.add_data(input.stream, name: "data")
+    |> MarketSimulator.resample(timeframe, name: "data_#{timeframe}")
+    |> MarketSimulator.stream()
+
+  {:ok, streamer} =
+    Streamer.start_link(resampled_stream,
+      on_events: fn market_events ->
+        candles =
+          for market_event <- market_events do
+            market_event.data["data_#{timeframe}"]
+          end
+
+        :ok = Chart.update_batch(chart, candles)
+      end,
+      mode: :manual,
+      speed: speed
+    )
+
+  :ok = Chart.set_streamer(chart, streamer)
+  streamer
+end
+
+initial_streamer = create_streamer.(initial_speed)
+Agent.update(streamer_ref, fn _ -> initial_streamer end)
+
+controller
+|> ChartController.stream()
+|> Kino.listen(fn event ->
+  current_streamer = Agent.get(streamer_ref, & &1)
+
+  case event.type do
+    :play ->
+      case Streamer.play(current_streamer) do
+        :ok -> ChartController.set_status(controller, :playing)
+        {:error, :invalid_state} -> :ok
+      end
+
+    :pause ->
+      case Streamer.pause(current_streamer) do
+        :ok -> ChartController.set_status(controller, :paused)
+        {:error, :invalid_state} -> :ok
+      end
+
+    :step ->
+      Streamer.step(current_streamer)
+
+    :fast_step ->
+      Streamer.fast_step(current_streamer)
+
+    :speed_change ->
+      Streamer.set_speed(current_streamer, event.speed)
+      Agent.update(speed_ref, fn _ -> event.speed end)
+
+    :reset ->
+      current_speed = Agent.get(speed_ref, & &1)
+
+      if Process.alive?(current_streamer) do
+        GenServer.stop(current_streamer, :normal)
+      end
+
+      new_streamer = create_streamer.(current_speed)
+      Agent.update(streamer_ref, fn _ -> new_streamer end)
+      Chart.clear(chart)
+      ChartController.set_status(controller, :paused)
+  end
+end)
+
+export_button =
+  Kino.Download.new(fn -> raise "unsupported yet" end,
+    label: "Export CSV",
+    filename: "download.csv"
+  )
+
+bottom_row = Kino.Layout.grid([controller, export_button], columns: 1, gap: 12)
+Kino.Layout.grid([chart, bottom_row], boxed: true, gap: 12)
+```
+
+```elixir
+%MarketSimulator{}
+|> MarketSimulator.add_data(input.stream, name: "data")
+|> MarketSimulator.resample(timeframe, name: "data_#{timeframe}")
+|> MarketSimulator.stream()
+
+input.stream
+|> Enum.take(3)
 ```

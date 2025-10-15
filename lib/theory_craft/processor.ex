@@ -59,6 +59,13 @@ defmodule TheoryCraft.Processor do
 
   alias TheoryCraft.MarketEvent
 
+  @typedoc """
+  A Processor specification as a tuple of module and options, or just a module.
+
+  When only the module is provided, options is an empty list.
+  """
+  @type spec :: {module(), Keyword.t()} | module()
+
   @doc """
   Initializes the processor with the given options.
 
@@ -95,6 +102,7 @@ defmodule TheoryCraft.Processor do
           :error -> raise ArgumentError, "Missing required option: :required_param"
         end
       end
+
   """
   @callback init(opts :: Keyword.t()) :: {:ok, state :: any()}
 
@@ -155,6 +163,7 @@ defmodule TheoryCraft.Processor do
 
         {:ok, updated_event, state}
       end
+
   """
   @callback next(event :: MarketEvent.t(), state :: any()) ::
               {:ok, updated_event :: MarketEvent.t(), new_state :: any()}

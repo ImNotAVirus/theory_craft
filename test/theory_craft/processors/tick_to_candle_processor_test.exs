@@ -630,7 +630,14 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
 
     test "creates first candle aligned on Sunday when weekly_open: :sunday" do
-      opts = [data: "xauusd", timeframe: "W", weekly_open: :sunday, market_open: ~T[00:00:00], name: "xauusd"]
+      opts = [
+        data: "xauusd",
+        timeframe: "W",
+        weekly_open: :sunday,
+        market_open: ~T[00:00:00],
+        name: "xauusd"
+      ]
+
       {:ok, state} = TickToCandleProcessor.init(opts)
 
       # 2024-01-17 is a Wednesday, should align to Sunday 2024-01-14

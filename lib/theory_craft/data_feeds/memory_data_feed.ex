@@ -43,8 +43,14 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   """
   @spec close(t()) :: :ok
   def close(%MemoryDataFeed{table: table}) do
-    true = :ets.delete(table)
-    :ok
+    case :ets.info(table) do
+      :undefined ->
+        :ok
+
+      _ ->
+        :ets.delete(table)
+        :ok
+    end
   end
 
   ## DataFeed behaviour
