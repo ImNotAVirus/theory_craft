@@ -2,46 +2,34 @@ defmodule TheoryCraft.TestIndicators do
   @moduledoc false
   # Test indicator modules for testing IndicatorProcessor behavior
 
+  alias TheoryCraft.MarketEvent
+
   defmodule SimpleIndicator do
     @moduledoc false
-    # A simple test indicator that counts events and adds a constant value
+    # A simple test indicator that returns a constant value
 
     @behaviour TheoryCraft.Indicator
 
-    @impl true
-    def loopback(), do: 0
+    alias TheoryCraft.MarketEvent
 
     @impl true
     def init(opts) do
-      output_name = Keyword.get(opts, :name, "simple")
       constant = Keyword.get(opts, :constant, 10.0)
+      data_name = Keyword.fetch!(opts, :data)
+      output_name = Keyword.fetch!(opts, :name)
 
-      {:ok, %{output_name: output_name, constant: constant, event_count: 0}}
+      {:ok, %{constant: constant, data_name: data_name, output_name: output_name}}
     end
 
     @impl true
-    def next(event, state) do
-      %{output_name: output_name, constant: constant, event_count: count} = state
+    def next(event, _is_new_bar, state) do
+      %{constant: constant, output_name: output_name} = state
 
-      # Add constant to all candle close prices
-      updated_data =
-        event.data
-        |> Enum.map(fn
-          {key, %TheoryCraft.Candle{close: close} = candle} ->
-            {key, %TheoryCraft.Candle{candle | close: close + constant}}
+      # Simply write the constant value to the event
+      updated_data = Map.put(event.data, output_name, constant)
+      updated_event = %MarketEvent{event | data: updated_data}
 
-          other ->
-            other
-        end)
-        |> Map.new()
-
-      # Also add indicator output
-      updated_data = Map.put(updated_data, output_name, constant)
-
-      updated_event = %TheoryCraft.MarketEvent{event | data: updated_data}
-      new_state = %{state | event_count: count + 1}
-
-      {:ok, updated_event, new_state}
+      {:ok, updated_event, state}
     end
   end
 
@@ -51,44 +39,61 @@ defmodule TheoryCraft.TestIndicators do
 
     @behaviour TheoryCraft.Indicator
 
-    @impl true
-    def loopback(), do: 20
+    alias TheoryCraft.MarketEvent
 
     @impl true
     def init(opts) do
       period = Keyword.get(opts, :period, 5)
-      input_name = Keyword.get(opts, :input, "candle")
-      output_name = Keyword.get(opts, :name, "sma")
+      data_name = Keyword.fetch!(opts, :data)
+      output_name = Keyword.fetch!(opts, :name)
 
-      {:ok,
-       %{
-         period: period,
-         input_name: input_name,
-         output_name: output_name,
-         values: []
-       }}
+      {:ok, %{period: period, values: [], data_name: data_name, output_name: output_name}}
     end
 
     @impl true
-    def next(event, state) do
-      %{period: period, input_name: input_name, output_name: output_name, values: values} =
-        state
+    def next(event, is_new_bar, state) do
+      %{period: period, values: values, data_name: data_name, output_name: output_name} = state
 
-      case Map.fetch(event.data, input_name) do
-        {:ok, %TheoryCraft.Candle{close: close}} ->
-          # Add current close to values and keep only last 'period' values
-          new_values = [close | values] |> Enum.take(period)
-          sma = Enum.sum(new_values) / length(new_values)
+      # Extract value from event
+      value = event.data[data_name]
 
-          updated_data = Map.put(event.data, output_name, sma)
-          updated_event = %TheoryCraft.MarketEvent{event | data: updated_data}
-          new_state = %{state | values: new_values}
+      # Extract close price from candle
+      close =
+        case value do
+          %TheoryCraft.Candle{close: close} -> close
+          %{close: close} -> close
+          v when is_number(v) -> v
+          _ -> 0.0
+        end
 
-          {:ok, updated_event, new_state}
+      # Update values based on whether it's a new bar
+      new_values =
+        if is_new_bar do
+          # New bar: add to history
+          [close | values] |> Enum.take(period)
+        else
+          # Same bar: update last value
+          case values do
+            [_last | rest] -> [close | rest]
+            [] -> [close]
+          end
+        end
 
-        :error ->
-          {:ok, event, state}
-      end
+      # Calculate SMA
+      sma =
+        if length(new_values) > 0 do
+          Enum.sum(new_values) / length(new_values)
+        else
+          nil
+        end
+
+      new_state = %{state | values: new_values}
+
+      # Write SMA value to event
+      updated_data = Map.put(event.data, output_name, sma)
+      updated_event = %MarketEvent{event | data: updated_data}
+
+      {:ok, updated_event, new_state}
     end
   end
 
@@ -97,9 +102,6 @@ defmodule TheoryCraft.TestIndicators do
     # An indicator that fails during init for error testing
 
     @behaviour TheoryCraft.Indicator
-
-    @impl true
-    def loopback(), do: 0
 
     @impl true
     def init(_opts) do
@@ -111,7 +113,7 @@ defmodule TheoryCraft.TestIndicators do
     end
 
     @impl true
-    def next(_event, _state) do
+    def next(_event, _is_new_bar, _state) do
       raise "Should not be called"
     end
   end

@@ -110,6 +110,7 @@ defmodule TheoryCraft.MarketSimulator do
   alias TheoryCraft.Processor
   alias TheoryCraft.Indicator
   alias TheoryCraft.Processors.TickToCandleProcessor
+  alias TheoryCraft.Processors.IndicatorProcessor
   alias TheoryCraft.DataFeeds.TicksCSVDataFeed
   alias TheoryCraft.Stages.DataFeedStage
   alias TheoryCraft.Stages.ProcessorStage
@@ -383,6 +384,7 @@ defmodule TheoryCraft.MarketSimulator do
     end
 
     # Add default :data to each indicator spec if not provided
+    # and wrap in IndicatorProcessor
     enhanced_specs =
       Enum.map(indicator_specs, fn indicator_spec ->
         {module, indicator_opts} = Utils.normalize_spec(indicator_spec)
@@ -399,7 +401,9 @@ defmodule TheoryCraft.MarketSimulator do
 
         # Add :data to opts if not present
         enhanced_opts = Keyword.put_new(indicator_opts, :data, data_name)
-        {module, enhanced_opts}
+
+        # Wrap indicator in IndicatorProcessor
+        {IndicatorProcessor, Keyword.put(enhanced_opts, :module, module)}
       end)
 
     # Extract all output names
@@ -462,7 +466,9 @@ defmodule TheoryCraft.MarketSimulator do
 
     # Add :data to opts if not present
     enhanced_opts = Keyword.put_new(opts, :data, data_name)
-    processor_spec = {processor_module, enhanced_opts}
+
+    # Wrap indicator in IndicatorProcessor
+    processor_spec = {IndicatorProcessor, Keyword.put(enhanced_opts, :module, processor_module)}
 
     # Add new layer with single processor and track new data stream
     %MarketSimulator{

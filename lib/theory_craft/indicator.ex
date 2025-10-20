@@ -1,31 +1,29 @@
 defmodule TheoryCraft.Indicator do
   @moduledoc """
-  Behaviour for stateful indicators that transform market data with historical lookback support.
+  Behaviour for stateful indicators that process values to calculate technical indicators.
 
-  An Indicator is a specialized component that processes market data (typically candles)
+  An Indicator is a specialized component that processes values (typically candle data)
   to calculate technical indicators like moving averages, RSI, MACD, etc. Indicators are
-  similar to Processors but include support for maintaining a historical buffer of candles
-  for lookback calculations.
+  wrapped by `TheoryCraft.Processors.IndicatorProcessor` to integrate into the processing
+  pipeline.
 
   ## Indicators vs Processors
 
-  While both Indicators and Processors transform `MarketEvent` structs, they serve different purposes:
+  While both Indicators and Processors transform data, they serve different purposes:
 
-  - **Processors** (`TheoryCraft.Processor`): General-purpose data transformation components.
-    Examples: converting ticks to candles, filtering events, data enrichment.
+  - **Processors** (`TheoryCraft.Processor`): General-purpose data transformation components
+    that work with `MarketEvent` structs. Examples: converting ticks to candles, filtering
+    events, data enrichment.
 
   - **Indicators** (`TheoryCraft.Indicator`): Specialized for technical analysis calculations
-    that require historical data. Examples: SMA, EMA, RSI, MACD, Bollinger Bands.
-
-  Indicators are wrapped by `TheoryCraft.Processors.IndicatorProcessor` to integrate into
-  the processing pipeline.
+    that work with individual values. Examples: SMA, EMA, RSI, MACD, Bollinger Bands.
+    They are wrapped by `IndicatorProcessor` to integrate into the event pipeline.
 
   ## Indicator Lifecycle
 
-  1. **Loopback declaration** (`loopback/0`): Declares how many historical bars to keep
-  2. **Initialization** (`init/1`): Called once at the start to set up initial state
-  3. **Processing** (`next/2`): Called for each event, receives the event and current state,
-     returns the transformed event and new state
+  1. **Initialization** (`init/1`): Called once at the start to set up initial state
+  2. **Processing** (`next/3`): Called for each value, receives the value, a flag indicating
+     if it's a new bar, and the current state, returns the calculated indicator value and new state
 
   ## Implementing an Indicator
 
@@ -35,30 +33,39 @@ defmodule TheoryCraft.Indicator do
         @behaviour TheoryCraft.Indicator
 
         @impl true
-        def loopback(), do: 20  # Keep 20 bars for 20-period SMA
-
-        @impl true
         def init(opts) do
           period = Keyword.get(opts, :period, 20)
-          output_name = Keyword.get(opts, :name, "sma")
-          state = %{period: period, output_name: output_name}
+          state = %{period: period, values: []}
           {:ok, state}
         end
 
         @impl true
-        def next(event, state) do
-          # Calculate SMA using historical bars (when available)
-          # For now, historical bars are not yet implemented
-          sma_value = calculate_sma(event, state)
+        def next(candle, is_new_bar, state) do
+          %{period: period, values: values} = state
 
-          updated_data = Map.put(event.data, state.output_name, sma_value)
-          updated_event = %TheoryCraft.MarketEvent{event | data: updated_data}
+          # On a new bar, add the value to history
+          new_values =
+            if is_new_bar do
+              [candle.close | values] |> Enum.take(period)
+            else
+              # Update the last value if it's the same bar
+              case values do
+                [_last | rest] -> [candle.close | rest]
+                [] -> [candle.close]
+              end
+            end
 
-          {:ok, updated_event, state}
-        end
+          # Calculate SMA
+          sma_value =
+            if length(new_values) > 0 do
+              Enum.sum(new_values) / length(new_values)
+            else
+              nil
+            end
 
-        defp calculate_sma(event, state) do
-          # Implementation here
+          new_state = %{state | values: new_values}
+
+          {:ok, sma_value, new_state}
         end
       end
 
@@ -89,57 +96,17 @@ defmodule TheoryCraft.Indicator do
   @type spec :: {module(), Keyword.t()} | module()
 
   @doc """
-  Returns the number of historical bars (candles) to keep in the indicator's buffer.
-
-  This callback is called once during indicator initialization to determine how many
-  historical bars should be maintained for lookback calculations. The value returned
-  affects memory usage and the minimum number of bars needed before the indicator
-  can produce valid output.
-
-  **Note**: Historical bar buffer is not yet implemented in the current version.
-  This callback is declared for future use.
-
-  ## Returns
-
-    - A non-negative integer representing the number of bars to keep in history
-
-  ## Examples
-
-      # Simple Moving Average with 20-period lookback
-      def loopback(), do: 20
-
-      # RSI with 14-period lookback
-      def loopback(), do: 14
-
-      # Indicator that doesn't need historical data
-      def loopback(), do: 0
-
-      # Bollinger Bands with 20-period SMA
-      def loopback(), do: 20
-
-  ## Guidelines
-
-  - Return `0` if your indicator doesn't need historical data
-  - For moving averages, return the period length
-  - For indicators with multiple periods (e.g., MACD), return the largest period
-  - Consider memory usage: larger values consume more memory
-  """
-  @callback loopback() :: non_neg_integer()
-
-  @doc """
   Initializes the indicator with the given options.
 
   This callback is invoked once when the indicator is added to a pipeline. It should
   return `{:ok, state}` where `state` is the initial state that will be passed to
-  subsequent `next/2` calls.
+  subsequent `next/3` calls.
 
   ## Parameters
 
     - `opts` - Keyword list of options for configuring the indicator. The available
       options depend on the specific indicator implementation. Common options include:
       - `:period` - Calculation period (e.g., 20 for SMA-20)
-      - `:name` - Output name for the indicator value in the event data
-      - `:data` - Name of the input data stream to read from
 
   ## Returns
 
@@ -150,17 +117,15 @@ defmodule TheoryCraft.Indicator do
       # Simple indicator with default period
       def init(opts) do
         period = Keyword.get(opts, :period, 14)
-        {:ok, %{period: period}}
+        {:ok, %{period: period, values: []}}
       end
 
       # Indicator with required parameters
       def init(opts) do
         period = Keyword.fetch!(opts, :period)
-        output_name = Keyword.get(opts, :name, "indicator")
 
         state = %{
           period: period,
-          output_name: output_name,
           values: []
         }
 
@@ -175,89 +140,84 @@ defmodule TheoryCraft.Indicator do
           raise ArgumentError, "Period must be positive, got: \#{period}"
         end
 
-        {:ok, %{period: period}}
+        {:ok, %{period: period, values: []}}
       end
 
   """
   @callback init(opts :: Keyword.t()) :: {:ok, state :: any()}
 
   @doc """
-  Processes a single market event and returns the transformed event with updated state.
+  Processes a market event and returns the updated event with indicator value.
 
-  This callback is invoked for each event in the stream. It receives the current event
-  and the indicator's state, and must return the transformed event along with the new state.
+  This callback is invoked for each market event in the stream. It receives the current event,
+  a flag indicating if it's a new bar, and the indicator's state, and must return the
+  updated event with the indicator value added along with the new state.
 
-  The indicator typically:
-  - Reads candle data from the event's data map
-  - Calculates the indicator value (using current and historical data)
-  - Writes the indicator value to a new key in the event's data map
-  - Updates internal state for the next calculation
-
-  **Note**: Historical bar buffer is not yet available. Indicators currently only have
-  access to the current event. Full historical lookback support will be added in a future version.
+  The `is_new_bar` parameter helps the indicator distinguish between:
+  - A new bar starting (add to history)
+  - An update to the current bar (update the last value)
 
   ## Parameters
 
-    - `event` - The current `MarketEvent` to process
-    - `state` - The current indicator state (from `init/1` or previous `next/2` call)
+    - `event` - The `MarketEvent` to process
+    - `is_new_bar` - Boolean indicating if this is a new bar (`true`) or an update to
+      the current bar (`false`)
+    - `state` - The current indicator state (from `init/1` or previous `next/3` call)
 
   ## Returns
 
     - `{:ok, updated_event, new_state}` - A tuple containing:
-      - `updated_event` - The transformed `MarketEvent`
+      - `updated_event` - The `MarketEvent` with the indicator value added
       - `new_state` - The updated indicator state for the next event
 
   ## Examples
 
-      # Simple indicator that adds a constant value
-      def next(event, state) do
-        candle = event.data["eurusd_m5"]
-        indicator_value = candle.close + state.offset
+      # Simple indicator that returns the close price
+      def next(event, _is_new_bar, state) do
+        %{data_name: data_name, output_name: output_name} = state
+        candle = event.data[data_name]
 
-        updated_data = Map.put(event.data, "my_indicator", indicator_value)
+        updated_data = Map.put(event.data, output_name, candle.close)
         updated_event = %MarketEvent{event | data: updated_data}
 
         {:ok, updated_event, state}
       end
 
-      # Indicator that maintains state
-      def next(event, state) do
-        candle = event.data[state.input_name]
+      # Moving average that maintains history
+      def next(event, is_new_bar, state) do
+        %{period: period, values: values, data_name: data_name, output_name: output_name} = state
+        candle = event.data[data_name]
 
-        # Add current value to history
-        values = [candle.close | state.values] |> Enum.take(state.period)
+        # Update values based on whether it's a new bar
+        new_values =
+          if is_new_bar do
+            # New bar: add to history
+            [candle.close | values] |> Enum.take(period)
+          else
+            # Same bar: update last value
+            case values do
+              [_last | rest] -> [candle.close | rest]
+              [] -> [candle.close]
+            end
+          end
 
-        # Calculate indicator
-        indicator_value = Enum.sum(values) / length(values)
+        # Calculate average
+        ma_value =
+          if length(new_values) > 0 do
+            Enum.sum(new_values) / length(new_values)
+          else
+            nil
+          end
 
-        # Update event
-        updated_data = Map.put(event.data, state.output_name, indicator_value)
+        new_state = %{state | values: new_values}
+
+        updated_data = Map.put(event.data, output_name, ma_value)
         updated_event = %MarketEvent{event | data: updated_data}
-
-        # Update state
-        new_state = %{state | values: values}
 
         {:ok, updated_event, new_state}
       end
 
-      # Indicator that reads from specific data stream
-      def next(event, state) do
-        %{input_name: input_name, output_name: output_name} = state
-
-        case Map.fetch(event.data, input_name) do
-          {:ok, candle} ->
-            indicator_value = calculate(candle, state)
-            updated_data = Map.put(event.data, output_name, indicator_value)
-            updated_event = %MarketEvent{event | data: updated_data}
-            {:ok, updated_event, state}
-
-          :error ->
-            # Input data not found, pass through unchanged
-            {:ok, event, state}
-        end
-      end
-
   """
-  @callback next(event :: MarketEvent.t(), state :: any()) ::
+  @callback next(event :: MarketEvent.t(), is_new_bar :: boolean(), state :: any()) ::
               {:ok, updated_event :: MarketEvent.t(), new_state :: any()}
 end
