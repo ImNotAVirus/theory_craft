@@ -149,20 +149,14 @@ defmodule TheoryCraft.Indicator do
   @doc """
   Processes a market event and returns the updated event with indicator value.
 
-  This callback is invoked for each market event in the stream. It receives the current event,
-  a flag indicating if it's a new bar, and the indicator's state, and must return the
-  updated event with the indicator value added along with the new state.
-
-  The `is_new_bar` parameter helps the indicator distinguish between:
-  - A new bar starting (add to history)
-  - An update to the current bar (update the last value)
+  This callback is invoked for each market event in the stream. It receives the current event
+  and the indicator's state, and must return the updated event with the indicator value added
+  along with the new state.
 
   ## Parameters
 
     - `event` - The `MarketEvent` to process
-    - `is_new_bar` - Boolean indicating if this is a new bar (`true`) or an update to
-      the current bar (`false`)
-    - `state` - The current indicator state (from `init/1` or previous `next/3` call)
+    - `state` - The current indicator state (from `init/1` or previous `next/2` call)
 
   ## Returns
 
@@ -173,7 +167,7 @@ defmodule TheoryCraft.Indicator do
   ## Examples
 
       # Simple indicator that returns the close price
-      def next(event, _is_new_bar, state) do
+      def next(event, state) do
         %{data_name: data_name, output_name: output_name} = state
         candle = event.data[data_name]
 
@@ -184,22 +178,12 @@ defmodule TheoryCraft.Indicator do
       end
 
       # Moving average that maintains history
-      def next(event, is_new_bar, state) do
+      def next(event, state) do
         %{period: period, values: values, data_name: data_name, output_name: output_name} = state
         candle = event.data[data_name]
 
-        # Update values based on whether it's a new bar
-        new_values =
-          if is_new_bar do
-            # New bar: add to history
-            [candle.close | values] |> Enum.take(period)
-          else
-            # Same bar: update last value
-            case values do
-              [_last | rest] -> [candle.close | rest]
-              [] -> [candle.close]
-            end
-          end
+        # Add value to history
+        new_values = [candle.close | values] |> Enum.take(period)
 
         # Calculate average
         ma_value =
@@ -218,6 +202,6 @@ defmodule TheoryCraft.Indicator do
       end
 
   """
-  @callback next(event :: MarketEvent.t(), is_new_bar :: boolean(), state :: any()) ::
+  @callback next(event :: MarketEvent.t(), state :: any()) ::
               {:ok, updated_event :: MarketEvent.t(), new_state :: any()}
 end

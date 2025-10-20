@@ -205,12 +205,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
 
     case Map.fetch(event.data, data_name) do
       {:ok, _value} ->
-        # For now, always pass true for is_new_bar
-        # TODO: implement proper bar tracking logic
-        is_new_bar = true
-
         # Call the indicator with the full MarketEvent
-        case indicator_module.next(event, is_new_bar, indicator_state) do
+        case indicator_module.next(event, indicator_state) do
           {:ok, updated_event, new_indicator_state} ->
             # Update the processor state
             new_state = %IndicatorProcessor{

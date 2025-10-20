@@ -22,7 +22,7 @@ defmodule TheoryCraft.TestIndicators do
     end
 
     @impl true
-    def next(event, _is_new_bar, state) do
+    def next(event, state) do
       %{constant: constant, output_name: output_name} = state
 
       # Simply write the constant value to the event
@@ -51,7 +51,7 @@ defmodule TheoryCraft.TestIndicators do
     end
 
     @impl true
-    def next(event, is_new_bar, state) do
+    def next(event, state) do
       %{period: period, values: values, data_name: data_name, output_name: output_name} = state
 
       # Extract value from event
@@ -66,18 +66,8 @@ defmodule TheoryCraft.TestIndicators do
           _ -> 0.0
         end
 
-      # Update values based on whether it's a new bar
-      new_values =
-        if is_new_bar do
-          # New bar: add to history
-          [close | values] |> Enum.take(period)
-        else
-          # Same bar: update last value
-          case values do
-            [_last | rest] -> [close | rest]
-            [] -> [close]
-          end
-        end
+      # Add value to history
+      new_values = [close | values] |> Enum.take(period)
 
       # Calculate SMA
       sma =
@@ -113,7 +103,7 @@ defmodule TheoryCraft.TestIndicators do
     end
 
     @impl true
-    def next(_event, _is_new_bar, _state) do
+    def next(_event, _state) do
       raise "Should not be called"
     end
   end
