@@ -14,12 +14,12 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
 
   ## State Management
 
-  The processor maintains its own state structure containing:
+  The processor maintains a minimal state structure containing:
   - The indicator module reference
   - The indicator's internal state
-  - The data stream name to read from
-  - The output name to write the indicator value to
-  - The last bar timestamp for detecting new bars
+
+  All other concerns (data stream names, output names, bar tracking) are managed
+  by the indicator itself.
 
   ## Examples
 
@@ -60,37 +60,36 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   @behaviour TheoryCraft.Processor
 
   @typedoc """
-  The processor state containing the indicator module, its state, data stream configuration, and last bar tracking.
+  The processor state containing the indicator module and its state.
   """
   @type t :: %__MODULE__{
           indicator_module: module(),
-          indicator_state: any(),
-          data_name: String.t(),
-          output_name: String.t(),
-          last_bar_time: DateTime.t() | nil
+          indicator_state: any()
         }
 
-  defstruct [:indicator_module, :indicator_state, :data_name, :output_name, :last_bar_time]
+  defstruct [:indicator_module, :indicator_state]
 
   ## Processor behaviour
 
   @doc """
   Initializes the indicator processor with the given options.
 
-  This function extracts the indicator module, data stream name, and output name from the options,
-  calls the indicator's `init/1` callback with the remaining options, and constructs the processor state.
+  This function extracts the indicator module from the options, then forwards all
+  remaining options to the indicator's `init/1` callback to construct the processor state.
 
   ## Options
 
     - `:module` (required) - The indicator module implementing `TheoryCraft.Indicator`
-    - `:data` (required) - The name of the data stream to read values from
-    - `:name` (required) - The name to use for the indicator output in the event data
     - All other options are passed through to the indicator's `init/1` callback
+
+  The indicator itself is responsible for validating its required options (such as
+  `:data` for the data stream name and `:name` for the output name).
 
   ## Returns
 
-    - `{:ok, state}` - The initial processor state containing the indicator module,
-      indicator state, data/output names, and last_bar_time (initially `nil`)
+    - `{:ok, state}` - The initial processor state containing the indicator module
+      and the indicator's internal state
+    - `{:error, reason}` - If the indicator's initialization fails
 
   ## Examples
 
@@ -98,10 +97,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
       iex> IndicatorProcessor.init(module: MyIndicators.SMA, data: "eurusd_m5", name: "sma20", period: 20)
       {:ok, %IndicatorProcessor{
         indicator_module: MyIndicators.SMA,
-        indicator_state: %{period: 20},
-        data_name: "eurusd_m5",
-        output_name: "sma20",
-        last_bar_time: nil
+        indicator_state: %{period: 20, data: "eurusd_m5", name: "sma20"}
       }}
 
   ## Errors
@@ -110,30 +106,20 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
       iex> IndicatorProcessor.init(data: "eurusd", name: "sma", period: 20)
       ** (ArgumentError) Missing required option: module
 
-      # Missing required data option
-      iex> IndicatorProcessor.init(module: MyIndicators.SMA, name: "sma", period: 20)
-      ** (ArgumentError) Missing required option: data
-
-      # Missing required name option
-      iex> IndicatorProcessor.init(module: MyIndicators.SMA, data: "eurusd", period: 20)
-      ** (ArgumentError) Missing required option: name
-
   """
   @impl true
   @spec init(Keyword.t()) :: {:ok, t()}
   def init(opts) do
     indicator_module = Utils.required_opt!(opts, :module)
-    data_name = Utils.required_opt!(opts, :data)
-    output_name = Utils.required_opt!(opts, :name)
 
-    case indicator_module.init(opts) do
+    # Forward all options (except :module) to the indicator
+    indicator_opts = Keyword.delete(opts, :module)
+
+    case indicator_module.init(indicator_opts) do
       {:ok, indicator_state} ->
         state = %IndicatorProcessor{
           indicator_module: indicator_module,
-          indicator_state: indicator_state,
-          data_name: data_name,
-          output_name: output_name,
-          last_bar_time: nil
+          indicator_state: indicator_state
         }
 
         {:ok, state}
@@ -144,14 +130,14 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   end
 
   @doc """
-  Processes a MarketEvent by extracting the value, delegating to the indicator, and writing the result.
+  Processes a MarketEvent by delegating to the indicator.
 
-  This function:
-  1. Extracts the value from the event's data map using the configured data stream name
-  2. Determines if it's a new bar by comparing timestamps with the last processed bar
-  3. Delegates to the indicator's `next/3` callback with the value and new bar flag
-  4. Writes the indicator's output to the event's data map with the configured output name
-  5. Updates the last bar timestamp
+  This function forwards the event to the indicator's `next/2` callback and updates
+  the processor state with the indicator's new state. The indicator is responsible for:
+  - Extracting the relevant data from the event
+  - Determining if it's a new bar
+  - Calculating its output value
+  - Writing the output to the event
 
   ## Parameters
 
@@ -161,8 +147,9 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   ## Returns
 
     - `{:ok, updated_event, new_state}` - A tuple containing:
-      - `updated_event` - The `MarketEvent` with the indicator output added
-      - `new_state` - The updated processor state with new indicator state and last bar time
+      - `updated_event` - The `MarketEvent` with the indicator output added by the indicator
+      - `new_state` - The updated processor state with new indicator state
+    - `{:error, reason}` - If the indicator's processing fails
 
   ## Examples
 
@@ -189,7 +176,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
       # The indicator has added its output to the event
       updated_event.data["sma5"]  # => SMA value calculated by the indicator
 
-      # Process another event with the same timestamp (update to current bar)
+      # Process another event
       event2 = %MarketEvent{data: %{"eurusd_m5" => updated_candle}}
       {:ok, updated_event2, newer_state} = IndicatorProcessor.next(event2, new_state)
 
@@ -199,30 +186,16 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   def next(event, %IndicatorProcessor{} = state) do
     %IndicatorProcessor{
       indicator_module: indicator_module,
-      indicator_state: indicator_state,
-      data_name: data_name
+      indicator_state: indicator_state
     } = state
 
-    case Map.fetch(event.data, data_name) do
-      {:ok, _value} ->
-        # Call the indicator with the full MarketEvent
-        case indicator_module.next(event, indicator_state) do
-          {:ok, updated_event, new_indicator_state} ->
-            # Update the processor state
-            new_state = %IndicatorProcessor{
-              state
-              | indicator_state: new_indicator_state
-            }
+    case indicator_module.next(event, indicator_state) do
+      {:ok, updated_event, new_indicator_state} ->
+        new_state = %IndicatorProcessor{state | indicator_state: new_indicator_state}
+        {:ok, updated_event, new_state}
 
-            {:ok, updated_event, new_state}
-
-          error ->
-            error
-        end
-
-      :error ->
-        # Data stream not found, pass through unchanged
-        {:ok, event, state}
+      error ->
+        error
     end
   end
 end

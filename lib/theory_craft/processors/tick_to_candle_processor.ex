@@ -208,7 +208,8 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     } = state
 
     tick = market_data_tick!(event, data_name)
-    candle = candle_from_tick(tick, price_type, fake_volume?)
+    # First tick is always a new bar and not a new market
+    candle = create_candle_from_tick(tick.time, tick, price_type, fake_volume?, false)
 
     updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
     updated_state = %TickToCandleProcessor{state | tick_counter: 1, current_candle: candle}
@@ -229,10 +230,11 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
     tick = market_data_tick!(event, data_name)
     new_candle? = new_candle?(tick, state)
+    new_market? = if new_candle?, do: new_market?(tick, state), else: false
 
     candle =
       case new_candle? do
-        true -> candle_from_tick(tick, price_type, fake_volume?)
+        true -> create_candle_from_tick(tick.time, tick, price_type, fake_volume?, new_market?)
         false -> update_candle_from_tick(current_candle, tick, price_type, fake_volume?)
       end
 
@@ -256,13 +258,17 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
       data_name: data_name,
       price_type: price_type,
       fake_volume?: fake_volume?,
-      timeframe: timeframe
+      timeframe: timeframe,
+      market_open: market_open
     } = state
 
     tick = market_data_tick!(event, data_name)
     aligned_time = align_time(tick.time, timeframe, state)
-    candle = %Candle{candle_from_tick(tick, price_type, fake_volume?) | time: aligned_time}
-    next_time = add_timeframe(aligned_time, timeframe)
+
+    # First tick is always a new bar and not a new market
+    candle = create_candle_from_tick(aligned_time, tick, price_type, fake_volume?, false)
+
+    next_time = calculate_next_candle_time(aligned_time, timeframe, market_open)
 
     updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
     updated_state = %TickToCandleProcessor{state | next_time: next_time, current_candle: candle}
@@ -280,23 +286,25 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
       price_type: price_type,
       current_candle: current_candle,
       fake_volume?: fake_volume?,
-      timeframe: timeframe
+      timeframe: timeframe,
+      market_open: market_open
     } = state
 
     tick = market_data_tick!(event, data_name)
     new_candle? = new_candle?(tick, state)
+    new_market? = if new_candle?, do: new_market?(tick, state), else: false
 
     {candle, next_time} =
       case new_candle? do
         true ->
           aligned_time = align_time(tick.time, timeframe, state)
 
-          new_candle = %Candle{
-            candle_from_tick(tick, price_type, fake_volume?)
-            | time: aligned_time
-          }
+          new_candle =
+            create_candle_from_tick(aligned_time, tick, price_type, fake_volume?, new_market?)
 
-          {new_candle, add_timeframe(aligned_time, timeframe)}
+          next_time = calculate_next_candle_time(aligned_time, timeframe, market_open)
+
+          {new_candle, next_time}
 
         false ->
           updated_candle = update_candle_from_tick(current_candle, tick, price_type, fake_volume?)
@@ -365,9 +373,24 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     end
   end
 
-  # Time-based timeframe (s, m, h)
+  # Time-based timeframe (s, m, h, D, W, M)
   defp new_candle?(%Tick{time: time}, %TickToCandleProcessor{next_time: next_time}) do
     DateTime.compare(time, next_time) != :lt
+  end
+
+  # Check if tick crosses market_open boundary
+  defp new_market?(
+         %Tick{time: tick_time},
+         %TickToCandleProcessor{
+           market_open: market_open,
+           current_candle: %Candle{time: candle_dt}
+         }
+       ) do
+    candle_time = DateTime.to_time(candle_dt)
+    tick_time_only = DateTime.to_time(tick_time)
+
+    Time.compare(candle_time, market_open) == :lt and
+      Time.compare(tick_time_only, market_open) != :lt
   end
 
   # Align a DateTime to the start of the timeframe period
@@ -502,7 +525,53 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     DateTime.from_naive!(naive, time_zone)
   end
 
-  defp candle_from_tick(%Tick{time: time} = tick, price_type, fake_volume?) do
+  # Calculate the next DateTime where time equals market_open
+  defp next_market_open_datetime(current_datetime, market_open_time) do
+    %DateTime{time_zone: time_zone, microsecond: {_value, precision}} = current_datetime
+
+    current_time = DateTime.to_time(current_datetime)
+    date = DateTime.to_date(current_datetime)
+
+    # If current time is before market_open, next market_open is today
+    # Otherwise, it's tomorrow
+    target_date =
+      case Time.compare(current_time, market_open_time) do
+        :lt -> date
+        _ -> Date.add(date, 1)
+      end
+
+    {:ok, naive} = NaiveDateTime.new(target_date, market_open_time)
+    result = DateTime.from_naive!(naive, time_zone)
+
+    %DateTime{result | microsecond: {0, precision}}
+  end
+
+  # Calculate next_time considering both timeframe and market_open
+  # Returns the earlier of: (current_time + timeframe) or next_market_open
+  defp calculate_next_time(current_time, timeframe, market_open) do
+    normal_next = add_timeframe(current_time, timeframe)
+    next_mo = next_market_open_datetime(current_time, market_open)
+
+    case DateTime.compare(next_mo, normal_next) do
+      :lt -> next_mo
+      _ -> normal_next
+    end
+  end
+
+  # Calculate next candle time
+  # For intra-day timeframes (s/m/h), considers market_open
+  # For D/W/M, market_open is already part of alignment
+  defp calculate_next_candle_time(aligned_time, timeframe, market_open) do
+    case timeframe do
+      {unit, _mult} when unit in ["s", "m", "h"] ->
+        calculate_next_time(aligned_time, timeframe, market_open)
+
+      _ ->
+        add_timeframe(aligned_time, timeframe)
+    end
+  end
+
+  defp create_candle_from_tick(time, tick, price_type, fake_volume?, new_market?) do
     price = tick_price(tick, price_type)
     volume = volume(tick, fake_volume?)
 
@@ -512,7 +581,9 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
       high: price,
       low: price,
       close: price,
-      volume: volume
+      volume: volume,
+      new_bar?: true,
+      new_market?: new_market?
     }
   end
 
@@ -535,7 +606,9 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
       | high: max(high, price),
         low: min(low, price),
         close: price,
-        volume: final_volume
+        volume: final_volume,
+        new_bar?: false,
+        new_market?: false
     }
   end
 end

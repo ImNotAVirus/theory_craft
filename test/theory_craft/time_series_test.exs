@@ -634,7 +634,7 @@ defmodule TheoryCraft.TimeSeriesTest do
     test "raises for non-existent datetime" do
       ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
 
-      assert_raise ArgumentError, ~r/datetime .* not found/, fn ->
+      assert_raise ArgumentError, ~r/datetime .+ not found in TimeSeries/, fn ->
         Access.get_and_update(ts, dt2(), fn val -> {val, val * 2} end)
       end
     end

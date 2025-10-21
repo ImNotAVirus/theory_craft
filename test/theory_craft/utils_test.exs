@@ -30,13 +30,13 @@ defmodule TheoryCraft.UtilsTest do
     end
 
     test "raises on tuple with non-atom module" do
-      assert_raise ArgumentError, ~r/Invalid spec/, fn ->
+      assert_raise ArgumentError, ~r/Invalid spec: \{"not_atom", \[\]\}/, fn ->
         Utils.normalize_spec({"not_atom", []})
       end
     end
 
     test "raises on tuple with non-list opts" do
-      assert_raise ArgumentError, ~r/Invalid spec/, fn ->
+      assert_raise ArgumentError, ~r/Invalid spec: \{String, "not_a_list"\}/, fn ->
         Utils.normalize_spec({String, "not_a_list"})
       end
     end

@@ -1513,6 +1513,177 @@ defmodule TheoryCraft.Processors.TickToCandleProcessorTest do
     end
   end
 
+  describe "candle metadata" do
+    test "new_bar? is true for first tick" do
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+      assert %Candle{new_bar?: true} = new_event.data["xauusd"]
+    end
+
+    test "new_bar? is false when updating same candle" do
+      opts = [data: "xauusd", timeframe: "t5", name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _new_event1, state} = TickToCandleProcessor.next(event1, state)
+
+      tick2 = build_tick(~U[2024-01-01 10:00:01Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event2, _new_state} = TickToCandleProcessor.next(event2, state)
+
+      assert %Candle{new_bar?: false} = new_event2.data["xauusd"]
+    end
+
+    test "new_bar? is true when creating new candle (tick-based)" do
+      opts = [data: "xauusd", timeframe: "t2", name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First candle
+      tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _new_event1, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick updates same candle
+      tick2 = build_tick(~U[2024-01-01 10:00:01Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event2, state} = TickToCandleProcessor.next(event2, state)
+      assert %Candle{new_bar?: false} = new_event2.data["xauusd"]
+
+      # Third tick creates new candle (counter reached)
+      tick3 = build_tick(~U[2024-01-01 10:00:02Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true} = new_event3.data["xauusd"]
+    end
+
+    test "new_bar? is true when creating new candle (time-based)" do
+      opts = [data: "xauusd", timeframe: "m5", name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First candle at 10:00
+      tick1 = build_tick(~U[2024-01-01 10:02:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, new_event1, state} = TickToCandleProcessor.next(event1, state)
+      assert %Candle{new_bar?: true, time: ~U[2024-01-01 10:00:00Z]} = new_event1.data["xauusd"]
+
+      # Second tick updates same candle
+      tick2 = build_tick(~U[2024-01-01 10:03:00Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event2, state} = TickToCandleProcessor.next(event2, state)
+      assert %Candle{new_bar?: false} = new_event2.data["xauusd"]
+
+      # Third tick creates new candle at 10:05
+      tick3 = build_tick(~U[2024-01-01 10:05:00Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true, time: ~U[2024-01-01 10:05:00Z]} = new_event3.data["xauusd"]
+    end
+
+    test "new_market? is false for first tick" do
+      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[09:00:00], name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      tick = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event = %MarketEvent{data: %{"xauusd" => tick}}
+
+      assert {:ok, new_event, _new_state} = TickToCandleProcessor.next(event, state)
+      assert %Candle{new_market?: false} = new_event.data["xauusd"]
+    end
+
+    test "new_market? is true when crossing market_open boundary (tick-based)" do
+      opts = [data: "xauusd", timeframe: "t5", market_open: ~T[09:00:00], name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick before market_open
+      tick1 = build_tick(~U[2024-01-01 08:59:55Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _new_event1, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick still before market_open
+      tick2 = build_tick(~U[2024-01-01 08:59:57Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event2, state} = TickToCandleProcessor.next(event2, state)
+      assert %Candle{new_market?: false} = new_event2.data["xauusd"]
+
+      # Third tick crosses market_open boundary
+      tick3 = build_tick(~U[2024-01-01 09:00:05Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true, new_market?: true} = new_event3.data["xauusd"]
+    end
+
+    test "new_market? is true when crossing market_open boundary (time-based)" do
+      opts = [data: "xauusd", timeframe: "m5", market_open: ~T[09:00:00], name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick before market_open
+      tick1 = build_tick(~U[2024-01-01 08:57:30Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, new_event1, state} = TickToCandleProcessor.next(event1, state)
+      assert %Candle{new_market?: false} = new_event1.data["xauusd"]
+
+      # Second tick still before market_open
+      tick2 = build_tick(~U[2024-01-01 08:59:00Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, new_event2, state} = TickToCandleProcessor.next(event2, state)
+      assert %Candle{new_market?: false} = new_event2.data["xauusd"]
+
+      # Third tick crosses market_open boundary - should create new candle with new_market? = true
+      tick3 = build_tick(~U[2024-01-01 09:00:05Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true, new_market?: true} = new_event3.data["xauusd"]
+    end
+
+    test "new_market? is false when next_time reached without crossing market_open (time-based)" do
+      opts = [data: "xauusd", timeframe: "m5", market_open: ~T[09:00:00], name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First tick after market_open
+      tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _new_event1, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick updates same candle
+      tick2 = build_tick(~U[2024-01-01 10:02:00Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, _new_event2, state} = TickToCandleProcessor.next(event2, state)
+
+      # Third tick creates new candle (next_time reached) but no market_open crossing
+      tick3 = build_tick(~U[2024-01-01 10:05:00Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true, new_market?: false} = new_event3.data["xauusd"]
+    end
+
+    test "new_market? is false when counter reaches limit without crossing market_open (tick-based)" do
+      opts = [data: "xauusd", timeframe: "t2", market_open: ~T[09:00:00], name: "xauusd"]
+      {:ok, state} = TickToCandleProcessor.init(opts)
+
+      # First candle after market_open
+      tick1 = build_tick(~U[2024-01-01 10:00:00Z], bid: 2000.0, ask: 2002.0)
+      event1 = %MarketEvent{data: %{"xauusd" => tick1}}
+      {:ok, _new_event1, state} = TickToCandleProcessor.next(event1, state)
+
+      # Second tick updates same candle
+      tick2 = build_tick(~U[2024-01-01 10:00:01Z], bid: 2001.0, ask: 2003.0)
+      event2 = %MarketEvent{data: %{"xauusd" => tick2}}
+      {:ok, _new_event2, state} = TickToCandleProcessor.next(event2, state)
+
+      # Third tick creates new candle (counter reached) but no market_open crossing
+      tick3 = build_tick(~U[2024-01-01 10:00:02Z], bid: 2002.0, ask: 2004.0)
+      event3 = %MarketEvent{data: %{"xauusd" => tick3}}
+      {:ok, new_event3, _new_state} = TickToCandleProcessor.next(event3, state)
+      assert %Candle{new_bar?: true, new_market?: false} = new_event3.data["xauusd"]
+    end
+  end
+
   ## Private test helpers
 
   defp build_tick(time, opts) do

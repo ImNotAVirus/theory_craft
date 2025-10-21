@@ -202,7 +202,7 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "raises error for invalid timeframe" do
-      assert_raise ArgumentError, ~r/Invalid timeframe/, fn ->
+      assert_raise ArgumentError, ~r/Invalid timeframe "invalid_timeframe"/, fn ->
         %MarketSimulator{}
         |> MarketSimulator.resample("invalid_timeframe")
       end
