@@ -94,4 +94,47 @@ defmodule TheoryCraft.Stages.StageHelpers do
     if stage_name, do: Logger.debug("#{stage_name} stopping normally")
     {:stop, :normal, state}
   end
+
+  @doc """
+  Extracts GenStage and GenServer options from a keyword list.
+
+  Returns a keyword list containing only valid GenStage/GenServer options:
+  - `:name` - Register the stage with a name
+  - `:timeout` - Timeout for GenServer.start_link
+  - `:debug` - Debug options
+  - `:spawn_opt` - Options for spawning the process
+  - `:hibernate_after` - Hibernate after inactivity
+
+  All other options are assumed to be stage-specific and are not included.
+
+  ## Examples
+
+      iex> extract_gen_stage_opts([name: :my_stage, timeout: 5000, custom: :opt])
+      [name: :my_stage, timeout: 5000]
+
+  """
+  def extract_gen_stage_opts(opts) do
+    Keyword.take(opts, [:name, :timeout, :debug, :spawn_opt, :hibernate_after])
+  end
+
+  @doc """
+  Extracts GenStage subscription options from a keyword list.
+
+  Returns a keyword list containing only valid subscription options:
+  - `:min_demand` - Minimum demand (default depends on stage type)
+  - `:max_demand` - Maximum demand (default depends on stage type)
+  - `:buffer_size` - Size of the buffer (default: 10000)
+  - `:buffer_keep` - Whether to keep the buffer (:first or :last, default: :last)
+
+  All other options are assumed to be stage-specific and are not included.
+
+  ## Examples
+
+      iex> extract_subscription_opts([min_demand: 5, max_demand: 100, custom: :opt])
+      [min_demand: 5, max_demand: 100]
+
+  """
+  def extract_subscription_opts(opts) do
+    Keyword.take(opts, [:min_demand, :max_demand, :buffer_size, :buffer_keep])
+  end
 end

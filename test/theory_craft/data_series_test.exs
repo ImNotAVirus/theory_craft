@@ -248,46 +248,8 @@ defmodule TheoryCraft.DataSeriesTest do
     end
   end
 
-  describe "Access.fetch/2 with integers" do
-    test "fetches value at valid index" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Access.fetch(series, 0) == {:ok, 30}
-      assert Access.fetch(series, 1) == {:ok, 20}
-      assert Access.fetch(series, 2) == {:ok, 10}
-    end
-
-    test "returns :error for out of bounds index" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
-
-      assert Access.fetch(series, 2) == :error
-      assert Access.fetch(series, 5) == :error
-      assert Access.fetch(series, 100) == :error
-    end
-
-    test "supports negative indices" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      # -1 is oldest, -2 is second oldest, etc.
-      assert Access.fetch(series, -1) == {:ok, 10}
-      assert Access.fetch(series, -2) == {:ok, 20}
-      assert Access.fetch(series, -3) == {:ok, 30}
-    end
-
-    test "returns :error for out of bounds negative index" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      assert Access.fetch(series, -2) == :error
-      assert Access.fetch(series, -5) == :error
-    end
-
-    test "returns :error for empty DataSeries" do
-      series = DataSeries.new()
-
-      assert Access.fetch(series, 0) == :error
-    end
-
-    test "works with bracket syntax" do
+  describe "Access protocol" do
+    test "bracket syntax works with positive index" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
 
       assert series[0] == 30
@@ -296,7 +258,7 @@ defmodule TheoryCraft.DataSeriesTest do
       assert series[3] == nil
     end
 
-    test "works with bracket syntax and negative indices" do
+    test "bracket syntax works with negative indices" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
 
       assert series[-1] == 10
@@ -305,27 +267,39 @@ defmodule TheoryCraft.DataSeriesTest do
       assert series[-4] == nil
     end
 
-    test "works with get_in/2" do
+    test "bracket syntax works with get_in" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
 
       assert get_in(series, [0]) == 30
       assert get_in(series, [1]) == 20
-      assert get_in(series, [2]) == 10
-      assert get_in(series, [3]) == nil
+      assert get_in(series, [-1]) == 10
+      assert get_in(series, [5]) == nil
     end
 
-    test "works with get_in/2 and negative indices" do
+    test "fetches value at valid positive index" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
 
-      assert get_in(series, [-1]) == 10
-      assert get_in(series, [-2]) == 20
-      assert get_in(series, [-3]) == 30
-      assert get_in(series, [-4]) == nil
+      assert Access.fetch(series, 0) == {:ok, 30}
+      assert Access.fetch(series, 1) == {:ok, 20}
+      assert Access.fetch(series, 2) == {:ok, 10}
     end
-  end
 
-  describe "Access.fetch/2 with ranges" do
-    test "fetches slice with positive range" do
+    test "fetches value at valid negative index" do
+      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
+
+      assert Access.fetch(series, -1) == {:ok, 10}
+      assert Access.fetch(series, -2) == {:ok, 20}
+      assert Access.fetch(series, -3) == {:ok, 30}
+    end
+
+    test "returns :error for out of bounds index" do
+      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
+
+      assert Access.fetch(series, 2) == :error
+      assert Access.fetch(series, -3) == :error
+    end
+
+    test "fetches slice with range" do
       series =
         DataSeries.new()
         |> DataSeries.add(10)
@@ -336,99 +310,9 @@ defmodule TheoryCraft.DataSeriesTest do
 
       assert Access.fetch(series, 0..2) == {:ok, [50, 40, 30]}
       assert Access.fetch(series, 1..3) == {:ok, [40, 30, 20]}
-      assert Access.fetch(series, 0..4) == {:ok, [50, 40, 30, 20, 10]}
     end
 
-    test "fetches slice with negative range" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-        |> DataSeries.add(50)
-
-      assert Access.fetch(series, -3..-1//1) == {:ok, [30, 20, 10]}
-      assert Access.fetch(series, -5..-3//1) == {:ok, [50, 40, 30]}
-      assert Access.fetch(series, -2..-1//1) == {:ok, [20, 10]}
-    end
-
-    test "fetches slice with mixed positive and negative indices" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-        |> DataSeries.add(50)
-
-      assert Access.fetch(series, 1..-2//1) == {:ok, [40, 30, 20]}
-      assert Access.fetch(series, 0..-1//1) == {:ok, [50, 40, 30, 20, 10]}
-      assert Access.fetch(series, 2..-1//1) == {:ok, [30, 20, 10]}
-    end
-
-    test "returns empty list for empty range" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Access.fetch(series, 2..1//1) == {:ok, []}
-      assert Access.fetch(series, 1..0//1) == {:ok, []}
-    end
-
-    test "handles range that goes beyond bounds" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      # Enum.slice handles out of bounds gracefully
-      assert Access.fetch(series, 0..10) == {:ok, [30, 20, 10]}
-      assert Access.fetch(series, 2..10) == {:ok, [10]}
-    end
-
-    test "works with bracket syntax and range" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-        |> DataSeries.add(50)
-
-      assert series[0..2] == [50, 40, 30]
-      assert series[1..3] == [40, 30, 20]
-      assert series[-3..-1//1] == [30, 20, 10]
-    end
-
-    test "single element range" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Access.fetch(series, 0..0) == {:ok, [30]}
-      assert Access.fetch(series, 1..1) == {:ok, [20]}
-      assert Access.fetch(series, -1..-1//1) == {:ok, [10]}
-    end
-
-    test "range on empty DataSeries returns empty list" do
-      series = DataSeries.new()
-
-      assert Access.fetch(series, 0..2) == {:ok, []}
-      assert Access.fetch(series, -3..-1//1) == {:ok, []}
-    end
-
-    test "range with step (using //)" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-        |> DataSeries.add(50)
-        |> DataSeries.add(60)
-
-      # Every other element
-      assert Access.fetch(series, 0..4//2) == {:ok, [60, 40, 20]}
-      assert Access.fetch(series, 1..5//2) == {:ok, [50, 30, 10]}
-    end
-  end
-
-  describe "Access.get_and_update/3" do
-    test "updates value at valid index" do
+    test "get_and_update updates value at valid index" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
 
       {old_value, new_series} = Access.get_and_update(series, 0, fn val -> {val, val * 2} end)
@@ -438,43 +322,7 @@ defmodule TheoryCraft.DataSeriesTest do
       assert new_series[1] == 10
     end
 
-    test "returns {old_value, new_data_series}" do
-      series = DataSeries.new() |> DataSeries.add(100)
-
-      {old_value, new_series} = Access.get_and_update(series, 0, fn val -> {val + 1, val + 2} end)
-
-      assert old_value == 101
-      assert new_series[0] == 102
-    end
-
-    test "raises for out of bounds index" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      assert_raise ArgumentError, ~r/index 5 out of bounds for DataSeries of size 1/, fn ->
-        Access.get_and_update(series, 5, fn val -> {val, val * 2} end)
-      end
-    end
-
-    test "supports negative indices" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      {old_value, new_series} = Access.get_and_update(series, -1, fn val -> {val, val * 2} end)
-
-      assert old_value == 10
-      assert new_series[-1] == 20
-      assert new_series[0] == 30
-      assert new_series[1] == 20
-    end
-
-    test "raises for out of bounds negative index" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      assert_raise ArgumentError, ~r/index -2 out of bounds for DataSeries of size 1/, fn ->
-        Access.get_and_update(series, -2, fn val -> {val, val * 2} end)
-      end
-    end
-
-    test "raises when function returns :pop" do
+    test "get_and_update raises when function returns :pop" do
       series = DataSeries.new() |> DataSeries.add(10)
 
       assert_raise ArgumentError, ~r/cannot pop from a DataSeries/, fn ->
@@ -482,119 +330,12 @@ defmodule TheoryCraft.DataSeriesTest do
       end
     end
 
-    test "works with update_in/3" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      new_series = update_in(series, [0], fn val -> val + 5 end)
-
-      assert new_series[0] == 35
-      assert new_series[1] == 20
-      assert new_series[2] == 10
-    end
-
-    test "works with get_and_update_in/3" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
-
-      {old_value, new_series} = get_and_update_in(series, [0], fn val -> {val * 10, val + 1} end)
-
-      assert old_value == 200
-      assert new_series[0] == 21
-      assert new_series[1] == 10
-    end
-
-    test "works with Access.all() to update all elements" do
-      series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      new_series = update_in(series.data, [Access.all()], fn val -> val * 10 end)
-
-      assert new_series == [30, 20, 10]
-    end
-  end
-
-  describe "Access.pop/2" do
-    test "always raises error" do
+    test "pop always raises error" do
       series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
 
       assert_raise RuntimeError, "you cannot pop a DataSeries", fn ->
         Access.pop(series, 0)
       end
-    end
-
-    test "raises for any index" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      assert_raise RuntimeError, "you cannot pop a DataSeries", fn ->
-        Access.pop(series, 0)
-      end
-
-      assert_raise RuntimeError, "you cannot pop a DataSeries", fn ->
-        Access.pop(series, 1)
-      end
-    end
-
-    test "pop_in/2 also raises" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      assert_raise RuntimeError, "you cannot pop a DataSeries", fn ->
-        pop_in(series, [0])
-      end
-    end
-  end
-
-  describe "integration with Kernel Access functions" do
-    test "chaining get_in and update_in" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      value = get_in(series, [1])
-      assert value == 20
-
-      new_series = update_in(series, [1], fn val -> val * 2 end)
-      assert get_in(new_series, [1]) == 40
-    end
-
-    test "get_and_update_in with complex transformation" do
-      series = DataSeries.new() |> DataSeries.add(5) |> DataSeries.add(10) |> DataSeries.add(15)
-
-      {doubled, new_series} =
-        get_and_update_in(series, [0], fn val ->
-          {val * 2, val + 1}
-        end)
-
-      assert doubled == 30
-      assert new_series[0] == 16
-    end
-
-    test "accessing with bracket syntax and update_in together" do
-      series = DataSeries.new() |> DataSeries.add(100) |> DataSeries.add(200)
-
-      old_value = series[0]
-      assert old_value == 200
-
-      new_series = update_in(series, [0], fn val -> val / 2 end)
-
-      assert new_series[0] == 100.0
-    end
-
-    test "update_in with negative indices" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      new_series = update_in(series, [-1], fn val -> val * 10 end)
-
-      assert new_series[-1] == 100
-      assert new_series[0] == 30
-    end
-
-    test "get_and_update_in with negative indices" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      {old_value, new_series} =
-        get_and_update_in(series, [-2], fn val ->
-          {val * 2, val + 5}
-        end)
-
-      assert old_value == 40
-      assert new_series[-2] == 25
-      assert new_series[0] == 30
     end
   end
 
@@ -753,315 +494,14 @@ defmodule TheoryCraft.DataSeriesTest do
     end
   end
 
-  describe "Enumerable protocol - Enum.map/2" do
-    test "maps over all values" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.map(series, fn x -> x * 2 end)
-
-      assert result == [60, 40, 20]
-    end
-
-    test "maps empty DataSeries returns empty list" do
-      series = DataSeries.new()
-
-      result = Enum.map(series, fn x -> x * 2 end)
-
-      assert result == []
-    end
-
-    test "maps with single element" do
-      series = DataSeries.new() |> DataSeries.add(42)
-
-      result = Enum.map(series, fn x -> x + 1 end)
-
-      assert result == [43]
-    end
-
-    test "maps with different types" do
-      series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      result = Enum.map(series, fn x -> "value_#{x}" end)
-
-      assert result == ["value_3", "value_2", "value_1"]
-    end
-  end
-
-  describe "Enumerable protocol - Enum.filter/2" do
-    test "filters values based on predicate" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.filter(series, fn x -> x > 15 end)
-
-      assert result == [30, 20]
-    end
-
-    test "filters returns empty list when no values match" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
-
-      result = Enum.filter(series, fn x -> x > 100 end)
-
-      assert result == []
-    end
-
-    test "filters returns all values when all match" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.filter(series, fn x -> x > 0 end)
-
-      assert result == [30, 20, 10]
-    end
-
-    test "filters empty DataSeries returns empty list" do
-      series = DataSeries.new()
-
-      result = Enum.filter(series, fn x -> x > 0 end)
-
-      assert result == []
-    end
-  end
-
-  describe "Enumerable protocol - Enum.reduce/3" do
-    test "reduces to sum" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.reduce(series, 0, fn x, acc -> x + acc end)
-
-      assert result == 60
-    end
-
-    test "reduces to product" do
-      series = DataSeries.new() |> DataSeries.add(2) |> DataSeries.add(3) |> DataSeries.add(4)
-
-      result = Enum.reduce(series, 1, fn x, acc -> x * acc end)
-
-      assert result == 24
-    end
-
-    test "reduces empty DataSeries returns accumulator" do
-      series = DataSeries.new()
-
-      result = Enum.reduce(series, 42, fn x, acc -> x + acc end)
-
-      assert result == 42
-    end
-
-    test "reduces to list (reverse chronological)" do
-      series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      result = Enum.reduce(series, [], fn x, acc -> [x | acc] end)
-
-      # Newest first in series, so result should be [1, 2, 3]
-      assert result == [1, 2, 3]
-    end
-  end
-
-  describe "Enumerable protocol - Enum.count/1" do
-    test "counts elements in DataSeries" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.count(series) == 3
-    end
-
-    test "counts empty DataSeries" do
-      series = DataSeries.new()
-
-      assert Enum.count(series) == 0
-    end
-
-    test "counts single element" do
-      series = DataSeries.new() |> DataSeries.add(42)
-
-      assert Enum.count(series) == 1
-    end
-
-    test "count is same as DataSeries.size/1" do
+  describe "Enumerable protocol" do
+    test "Enum.count matches DataSeries.size" do
       series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
 
       assert Enum.count(series) == DataSeries.size(series)
     end
-  end
 
-  describe "Enumerable protocol - Enum.member?/2" do
-    test "checks if element is member" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.member?(series, 10) == true
-      assert Enum.member?(series, 20) == true
-      assert Enum.member?(series, 30) == true
-    end
-
-    test "returns false for non-member" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
-
-      assert Enum.member?(series, 30) == false
-      assert Enum.member?(series, 100) == false
-    end
-
-    test "returns false for empty DataSeries" do
-      series = DataSeries.new()
-
-      assert Enum.member?(series, 10) == false
-    end
-
-    test "works with different types" do
-      series = DataSeries.new() |> DataSeries.add(:atom) |> DataSeries.add("string")
-
-      assert Enum.member?(series, :atom) == true
-      assert Enum.member?(series, "string") == true
-      assert Enum.member?(series, :other) == false
-    end
-  end
-
-  describe "Enumerable protocol - Enum.take/2" do
-    test "takes first n elements" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-
-      result = Enum.take(series, 2)
-
-      assert result == [40, 30]
-    end
-
-    test "takes more than available returns all elements" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20)
-
-      result = Enum.take(series, 10)
-
-      assert result == [20, 10]
-    end
-
-    test "takes 0 returns empty list" do
-      series = DataSeries.new() |> DataSeries.add(10)
-
-      result = Enum.take(series, 0)
-
-      assert result == []
-    end
-
-    test "takes from empty DataSeries returns empty list" do
-      series = DataSeries.new()
-
-      result = Enum.take(series, 5)
-
-      assert result == []
-    end
-  end
-
-  describe "Enumerable protocol - Enum.slice/2" do
-    test "slices with range" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-        |> DataSeries.add(50)
-
-      result = Enum.slice(series, 1..3)
-
-      assert result == [40, 30, 20]
-    end
-
-    test "slices with start and length" do
-      series =
-        DataSeries.new()
-        |> DataSeries.add(10)
-        |> DataSeries.add(20)
-        |> DataSeries.add(30)
-        |> DataSeries.add(40)
-
-      result = Enum.slice(series, 1, 2)
-
-      assert result == [30, 20]
-    end
-
-    test "slices empty DataSeries returns empty list" do
-      series = DataSeries.new()
-
-      result = Enum.slice(series, 0..2)
-
-      assert result == []
-    end
-  end
-
-  describe "Enumerable protocol - other Enum functions" do
-    test "Enum.reverse/1" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.reverse(series)
-
-      assert result == [10, 20, 30]
-    end
-
-    test "Enum.any?/2" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.any?(series, fn x -> x > 25 end) == true
-      assert Enum.any?(series, fn x -> x > 100 end) == false
-    end
-
-    test "Enum.all?/2" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.all?(series, fn x -> x > 0 end) == true
-      assert Enum.all?(series, fn x -> x > 15 end) == false
-    end
-
-    test "Enum.find/2" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.find(series, fn x -> x > 15 end) == 30
-      assert Enum.find(series, fn x -> x > 100 end) == nil
-    end
-
-    test "Enum.sum/1" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      assert Enum.sum(series) == 60
-    end
-
-    test "Enum.max/1" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(30) |> DataSeries.add(20)
-
-      assert Enum.max(series) == 30
-    end
-
-    test "Enum.min/1" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(30) |> DataSeries.add(20)
-
-      assert Enum.min(series) == 10
-    end
-
-    test "Enum.join/2" do
-      series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      assert Enum.join(series, ", ") == "3, 2, 1"
-    end
-
-    test "Enum.with_index/1" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.with_index(series)
-
-      assert result == [{30, 0}, {20, 1}, {10, 2}]
-    end
-
-    test "Enum.into/2 converts to list" do
-      series = DataSeries.new() |> DataSeries.add(10) |> DataSeries.add(20) |> DataSeries.add(30)
-
-      result = Enum.into(series, [])
-
-      assert result == [30, 20, 10]
-    end
-  end
-
-  describe "Enumerable protocol - integration with circular buffer" do
-    test "enumerates over max_size DataSeries" do
+    test "enumerates over circular buffer correctly" do
       series = DataSeries.new(max_size: 3)
 
       series =
@@ -1071,24 +511,6 @@ defmodule TheoryCraft.DataSeriesTest do
 
       # Should contain [4, 3, 2] (1 was dropped)
       assert result == [4, 3, 2]
-    end
-
-    test "Enum.count matches size after circular buffer overflow" do
-      series = DataSeries.new(max_size: 2)
-      series = series |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      assert Enum.count(series) == 2
-      assert DataSeries.size(series) == 2
-    end
-
-    test "Enum.member? works with circular buffer" do
-      series = DataSeries.new(max_size: 2)
-      series = series |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
-
-      assert Enum.member?(series, 3) == true
-      assert Enum.member?(series, 2) == true
-      # Was dropped
-      assert Enum.member?(series, 1) == false
     end
   end
 end

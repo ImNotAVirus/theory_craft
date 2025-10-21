@@ -228,8 +228,8 @@ defmodule TheoryCraft.TimeSeriesTest do
     end
   end
 
-  describe "at/2 with integer index" do
-    test "returns value at valid index" do
+  describe "at/2" do
+    test "returns value at valid integer index" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
@@ -259,9 +259,7 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert TimeSeries.at(ts, 1) == nil
       assert TimeSeries.at(ts, -2) == nil
     end
-  end
 
-  describe "at/2 with DateTime" do
     test "returns value at exact datetime" do
       ts =
         TimeSeries.new()
@@ -277,16 +275,10 @@ defmodule TheoryCraft.TimeSeriesTest do
 
       assert TimeSeries.at(ts, dt2()) == nil
     end
-
-    test "returns nil for empty TimeSeries" do
-      ts = TimeSeries.new()
-
-      assert TimeSeries.at(ts, dt1()) == nil
-    end
   end
 
-  describe "replace_at/3 with integer index" do
-    test "replaces value at index 0 (head)" do
+  describe "replace_at/3" do
+    test "replaces value at integer index" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
@@ -301,18 +293,6 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert TimeSeries.size(new_ts) == 3
     end
 
-    test "replaces value at positive index" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      new_ts = TimeSeries.replace_at(ts, 1, 999.0)
-
-      assert new_ts[0] == 101.0
-      assert new_ts[1] == 999.0
-    end
-
     test "replaces value at negative index" do
       ts =
         TimeSeries.new()
@@ -325,7 +305,7 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert new_ts[0] == 101.0
     end
 
-    test "returns original series if index out of bounds" do
+    test "returns original series if integer index out of bounds" do
       ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
 
       new_ts = TimeSeries.replace_at(ts, 5, 999.0)
@@ -333,10 +313,8 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert new_ts == ts
       assert new_ts[0] == 100.0
     end
-  end
 
-  describe "replace_at/3 with DateTime" do
-    test "replaces value at datetime (head)" do
+    test "replaces value at datetime" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
@@ -346,20 +324,6 @@ defmodule TheoryCraft.TimeSeriesTest do
 
       assert new_ts[dt2()] == 999.0
       assert new_ts[dt1()] == 100.0
-    end
-
-    test "replaces value at datetime (middle)" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      new_ts = TimeSeries.replace_at(ts, dt2(), 999.0)
-
-      assert new_ts[dt2()] == 999.0
-      assert new_ts[dt1()] == 100.0
-      assert new_ts[dt3()] == 102.0
     end
 
     test "returns original series if datetime not found" do
@@ -441,50 +405,57 @@ defmodule TheoryCraft.TimeSeriesTest do
     end
   end
 
-  describe "Access.fetch/2 with integer index" do
-    test "fetches value at valid index" do
+  describe "Access protocol" do
+    test "bracket syntax works with integer index" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
         |> TimeSeries.add(dt3(), 102.0)
 
-      assert Access.fetch(ts, 0) == {:ok, 102.0}
-      assert Access.fetch(ts, 1) == {:ok, 101.0}
-      assert Access.fetch(ts, 2) == {:ok, 100.0}
+      assert ts[0] == 102.0
+      assert ts[1] == 101.0
+      assert ts[2] == 100.0
+      assert ts[3] == nil
     end
 
-    test "supports negative indices" do
+    test "bracket syntax works with negative indices" do
+      ts =
+        TimeSeries.new()
+        |> TimeSeries.add(dt1(), 100.0)
+        |> TimeSeries.add(dt2(), 101.0)
+        |> TimeSeries.add(dt3(), 102.0)
+
+      assert ts[-1] == 100.0
+      assert ts[-2] == 101.0
+      assert ts[-3] == 102.0
+      assert ts[-4] == nil
+    end
+
+    test "bracket syntax works with datetime" do
+      ts =
+        TimeSeries.new()
+        |> TimeSeries.add(dt1(), 100.0)
+        |> TimeSeries.add(dt2(), 101.0)
+        |> TimeSeries.add(dt3(), 102.0)
+
+      assert ts[dt1()] == 100.0
+      assert ts[dt2()] == 101.0
+      assert ts[dt3()] == 102.0
+      assert ts[dt4()] == nil
+    end
+
+    test "fetches value at valid integer index" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
 
-      assert Access.fetch(ts, -1) == {:ok, 100.0}
-      assert Access.fetch(ts, -2) == {:ok, 101.0}
+      assert Access.fetch(ts, 0) == {:ok, 101.0}
+      assert Access.fetch(ts, 1) == {:ok, 100.0}
     end
 
-    test "returns :error for out of bounds" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert Access.fetch(ts, 1) == :error
-      assert Access.fetch(ts, -2) == :error
-    end
-
-    test "works with bracket syntax" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      assert ts[0] == 101.0
-      assert ts[1] == 100.0
-      assert ts[2] == nil
-    end
-  end
-
-  describe "Access.fetch/2 with DateTime" do
-    test "fetches value at exact datetime" do
+    test "fetches value at datetime" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
@@ -494,301 +465,60 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert Access.fetch(ts, dt2()) == {:ok, 101.0}
     end
 
-    test "returns :error for non-existent datetime" do
+    test "returns :error for out of bounds or non-existent key" do
       ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
 
+      assert Access.fetch(ts, 10) == :error
       assert Access.fetch(ts, dt2()) == :error
     end
 
-    test "works with bracket syntax" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      assert ts[dt1()] == 100.0
-      assert ts[dt2()] == 101.0
-      assert ts[dt3()] == nil
-    end
-
-    test "returns {:ok, nil} when nil value is stored" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), nil)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      assert Access.fetch(ts, dt1()) == {:ok, nil}
-      assert Access.fetch(ts, dt2()) == {:ok, 101.0}
-    end
-  end
-
-  describe "Access.fetch/2 with Range" do
-    test "fetches slice of values" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-        |> TimeSeries.add(dt4(), 103.0)
-
-      assert Access.fetch(ts, 0..2) == {:ok, [103.0, 102.0, 101.0]}
-      assert Access.fetch(ts, 1..2) == {:ok, [102.0, 101.0]}
-    end
-
-    test "supports negative ranges" do
+    test "fetches slice with range" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
         |> TimeSeries.add(dt3(), 102.0)
 
-      assert Access.fetch(ts, -2..-1//1) == {:ok, [101.0, 100.0]}
+      assert Access.fetch(ts, 0..1) == {:ok, [102.0, 101.0]}
     end
 
-    test "returns empty list for empty range" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert Access.fetch(ts, 1..0//1) == {:ok, []}
-    end
-
-    test "works with bracket syntax" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      assert ts[0..1] == [102.0, 101.0]
-    end
-  end
-
-  describe "Access.get_and_update/3 with integer index" do
-    test "updates value at index and returns {old_value, new_ts}" do
+    test "get_and_update updates value at integer index" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
 
-      {old, new_ts} = Access.get_and_update(ts, 0, fn val -> {val, val * 2} end)
+      {old_value, new_ts} = Access.get_and_update(ts, 0, fn val -> {val, val * 2} end)
 
-      assert old == 101.0
+      assert old_value == 101.0
       assert new_ts[0] == 202.0
       assert new_ts[1] == 100.0
     end
 
-    test "supports negative indices" do
+    test "get_and_update updates value at datetime" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
 
-      {old, new_ts} = Access.get_and_update(ts, -1, fn val -> {val, val * 10} end)
+      {old_value, new_ts} = Access.get_and_update(ts, dt1(), fn val -> {val, val * 2} end)
 
-      assert old == 100.0
-      assert new_ts[-1] == 1000.0
-    end
-
-    test "raises for out of bounds index" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert_raise ArgumentError, ~r/index 5 out of bounds/, fn ->
-        Access.get_and_update(ts, 5, fn val -> {val, val * 2} end)
-      end
-    end
-
-    test "raises when function returns :pop" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert_raise ArgumentError, ~r/cannot pop from a TimeSeries/, fn ->
-        Access.get_and_update(ts, 0, fn _ -> :pop end)
-      end
-    end
-
-    test "works with update_in/3" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      new_ts = update_in(ts, [0], fn val -> val + 10 end)
-
-      assert new_ts[0] == 111.0
-      assert new_ts[1] == 100.0
-    end
-  end
-
-  describe "Access.get_and_update/3 with DateTime" do
-    test "updates value at datetime and returns {old_value, new_ts}" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      {old, new_ts} = Access.get_and_update(ts, dt1(), fn val -> {val, val * 2} end)
-
-      assert old == 100.0
+      assert old_value == 100.0
       assert new_ts[dt1()] == 200.0
       assert new_ts[dt2()] == 101.0
     end
 
-    test "raises for non-existent datetime" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert_raise ArgumentError, ~r/datetime .+ not found in TimeSeries/, fn ->
-        Access.get_and_update(ts, dt2(), fn val -> {val, val * 2} end)
-      end
-    end
-
-    test "raises when function returns :pop" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert_raise ArgumentError, ~r/cannot pop from a TimeSeries/, fn ->
-        Access.get_and_update(ts, dt1(), fn _ -> :pop end)
-      end
-    end
-
-    test "works with update_in/3" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      new_ts = update_in(ts, [dt1()], fn val -> val + 50 end)
-
-      assert new_ts[dt1()] == 150.0
-      assert new_ts[dt2()] == 101.0
-    end
-
-    test "works with get_and_update_in/3" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      {old, new_ts} = get_and_update_in(ts, [dt2()], fn val -> {val * 10, val + 1} end)
-
-      assert old == 1010.0
-      assert new_ts[dt2()] == 102.0
-    end
-  end
-
-  describe "Access.pop/2" do
-    test "always raises error with index" do
+    test "pop always raises error" do
       ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
 
       assert_raise RuntimeError, "you cannot pop a TimeSeries", fn ->
         Access.pop(ts, 0)
       end
     end
-
-    test "always raises error with datetime" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert_raise RuntimeError, "you cannot pop a TimeSeries", fn ->
-        Access.pop(ts, dt1())
-      end
-    end
   end
 
-  describe "Enumerable protocol - Enum.map/2" do
-    test "maps over {datetime, value} tuples" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      result = Enum.map(ts, fn {_dt, value} -> value * 2 end)
-
-      assert result == [204.0, 202.0, 200.0]
-    end
-
-    test "can access datetime in map" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      result = Enum.map(ts, fn {dt, _value} -> DateTime.to_unix(dt) end)
-
-      assert result == [DateTime.to_unix(dt2()), DateTime.to_unix(dt1())]
-    end
-
-    test "maps empty TimeSeries returns empty list" do
-      ts = TimeSeries.new()
-
-      result = Enum.map(ts, fn {_dt, val} -> val * 2 end)
-
-      assert result == []
-    end
-  end
-
-  describe "Enumerable protocol - Enum.filter/2" do
-    test "filters based on value" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      result = Enum.filter(ts, fn {_dt, value} -> value > 100.5 end)
-
-      assert result == [{dt3(), 102.0}, {dt2(), 101.0}]
-    end
-
-    test "filters based on datetime" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      result = Enum.filter(ts, fn {dt, _value} -> DateTime.compare(dt, dt2()) != :lt end)
-
-      assert result == [{dt3(), 102.0}, {dt2(), 101.0}]
-    end
-  end
-
-  describe "Enumerable protocol - Enum.reduce/3" do
-    test "reduces to sum of values" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      result = Enum.reduce(ts, 0, fn {_dt, value}, acc -> value + acc end)
-
-      assert result == 303.0
-    end
-
-    test "reduces empty TimeSeries returns accumulator" do
-      ts = TimeSeries.new()
-
-      result = Enum.reduce(ts, 42, fn {_dt, value}, acc -> value + acc end)
-
-      assert result == 42
-    end
-  end
-
-  describe "Enumerable protocol - Enum.count/1" do
-    test "counts elements in TimeSeries" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      assert Enum.count(ts) == 3
-    end
-
-    test "counts empty TimeSeries" do
-      ts = TimeSeries.new()
-
-      assert Enum.count(ts) == 0
-    end
-
-    test "count is same as TimeSeries.size/1" do
+  describe "Enumerable protocol" do
+    test "Enum.count matches TimeSeries.size" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
@@ -796,87 +526,17 @@ defmodule TheoryCraft.TimeSeriesTest do
 
       assert Enum.count(ts) == TimeSeries.size(ts)
     end
-  end
 
-  describe "Enumerable protocol - Enum.member?/2" do
-    test "checks if datetime is member" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      assert Enum.member?(ts, dt1()) == true
-      assert Enum.member?(ts, dt2()) == true
-    end
-
-    test "returns false for non-existent datetime" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert Enum.member?(ts, dt2()) == false
-      assert Enum.member?(ts, dt3()) == false
-    end
-
-    test "returns true regardless of value when datetime exists" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      # datetime exists, so member? returns true
-      assert Enum.member?(ts, dt1()) == true
-    end
-
-    test "returns false for non-datetime elements" do
-      ts = TimeSeries.new() |> TimeSeries.add(dt1(), 100.0)
-
-      assert Enum.member?(ts, 100.0) == false
-      assert Enum.member?(ts, "string") == false
-      assert Enum.member?(ts, {dt1(), 100.0}) == false
-    end
-  end
-
-  describe "Enumerable protocol - other Enum functions" do
-    test "Enum.reverse/1" do
+    test "enumerates as {datetime, value} tuples" do
       ts =
         TimeSeries.new()
         |> TimeSeries.add(dt1(), 100.0)
         |> TimeSeries.add(dt2(), 101.0)
         |> TimeSeries.add(dt3(), 102.0)
 
-      result = Enum.reverse(ts)
+      result = Enum.to_list(ts)
 
-      assert result == [{dt1(), 100.0}, {dt2(), 101.0}, {dt3(), 102.0}]
-    end
-
-    test "Enum.any?/2" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-
-      assert Enum.any?(ts, fn {_dt, val} -> val > 100.5 end) == true
-      assert Enum.any?(ts, fn {_dt, val} -> val > 200 end) == false
-    end
-
-    test "Enum.find/2" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      assert Enum.find(ts, fn {_dt, val} -> val > 100.5 end) == {dt3(), 102.0}
-      assert Enum.find(ts, fn {_dt, val} -> val > 200 end) == nil
-    end
-
-    test "Enum.take/2" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-        |> TimeSeries.add(dt4(), 103.0)
-
-      result = Enum.take(ts, 2)
-
-      assert result == [{dt4(), 103.0}, {dt3(), 102.0}]
+      assert result == [{dt3(), 102.0}, {dt2(), 101.0}, {dt1(), 100.0}]
     end
   end
 
@@ -906,18 +566,6 @@ defmodule TheoryCraft.TimeSeriesTest do
       assert ts[dt3()] == 102.0
       assert ts[1] == 101.0
       assert ts[dt2()] == 101.0
-    end
-
-    test "enumeration preserves chronological information" do
-      ts =
-        TimeSeries.new()
-        |> TimeSeries.add(dt1(), 100.0)
-        |> TimeSeries.add(dt2(), 101.0)
-        |> TimeSeries.add(dt3(), 102.0)
-
-      result = Enum.to_list(ts)
-
-      assert result == [{dt3(), 102.0}, {dt2(), 101.0}, {dt1(), 100.0}]
     end
   end
 

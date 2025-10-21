@@ -60,6 +60,7 @@ defmodule TheoryCraft.Stages.DataFeedStage do
   require Logger
 
   alias TheoryCraft.DataFeed
+  alias TheoryCraft.Stages.StageHelpers
   alias TheoryCraft.Utils
 
   @typedoc """
@@ -150,7 +151,18 @@ defmodule TheoryCraft.Stages.DataFeedStage do
     max_demand = Keyword.get(opts, :max_demand, 1000)
     stage_name = Keyword.get(opts, :stage_name)
 
-    gen_stage_opts = if stage_name, do: [name: stage_name], else: []
+    # Extract GenStage/GenServer options, excluding :name which is for data stream name
+    gen_stage_opts =
+      opts
+      |> Keyword.drop([:name, :max_demand])
+      |> StageHelpers.extract_gen_stage_opts()
+
+    gen_stage_opts =
+      if stage_name do
+        Keyword.put(gen_stage_opts, :name, stage_name)
+      else
+        gen_stage_opts
+      end
 
     Logger.debug("name=#{name}, max_demand=#{max_demand}")
 

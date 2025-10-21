@@ -39,7 +39,7 @@ defmodule TheoryCraft.Stages.BroadcastStage do
   """
   @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(opts) do
-    gen_stage_opts = Keyword.take(opts, [:name])
+    gen_stage_opts = StageHelpers.extract_gen_stage_opts(opts)
     GenStage.start_link(__MODULE__, opts, gen_stage_opts)
   end
 
@@ -50,10 +50,16 @@ defmodule TheoryCraft.Stages.BroadcastStage do
     Logger.debug("BroadcastStage starting")
 
     subscribe_to = Keyword.fetch!(opts, :subscribe_to)
+    subscription_opts = StageHelpers.extract_subscription_opts(opts)
     state = StageHelpers.init_tracking_state()
 
-    {:producer_consumer, state,
-     subscribe_to: subscribe_to, dispatcher: GenStage.BroadcastDispatcher}
+    stage_opts =
+      Keyword.merge(
+        [subscribe_to: subscribe_to, dispatcher: GenStage.BroadcastDispatcher],
+        subscription_opts
+      )
+
+    {:producer_consumer, state, stage_opts}
   end
 
   @impl true

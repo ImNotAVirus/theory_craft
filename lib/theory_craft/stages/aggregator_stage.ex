@@ -85,7 +85,7 @@ defmodule TheoryCraft.Stages.AggregatorStage do
   """
   @spec start_link([start_option()]) :: GenServer.on_start()
   def start_link(opts) do
-    gen_stage_opts = Keyword.take(opts, [:name])
+    gen_stage_opts = StageHelpers.extract_gen_stage_opts(opts)
     GenStage.start_link(__MODULE__, opts, gen_stage_opts)
   end
 
@@ -108,9 +108,17 @@ defmodule TheoryCraft.Stages.AggregatorStage do
 
     subscribe_to = Keyword.get(opts, :subscribe_to, [])
 
+    # Extract subscription options
+    # Note: max_demand is excluded because it's used internally by this stage for GenStage.ask
+    subscription_opts =
+      opts
+      |> Keyword.delete(:max_demand)
+      |> StageHelpers.extract_subscription_opts()
+      |> Keyword.merge(subscribe_to: subscribe_to)
+
     Logger.debug("AggregatorStage initialized successfully")
 
-    {:producer_consumer, state, subscribe_to: subscribe_to}
+    {:producer_consumer, state, subscription_opts}
   end
 
   @impl true

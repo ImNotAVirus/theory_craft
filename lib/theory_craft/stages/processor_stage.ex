@@ -35,8 +35,16 @@ defmodule TheoryCraft.Stages.ProcessorStage do
       - `processor_opts` are passed to `processor_module.init/1`
     - `:subscribe_to` - List of upstream stages to consume from
 
-  Additional GenStage options:
+  Additional GenStage/GenServer options:
     - `:name` - Register the stage with a name
+    - `:timeout`, `:debug`, `:spawn_opt`, `:hibernate_after` - GenServer options
+
+  Subscription options (control backpressure and buffering):
+    - `:min_demand` - Minimum demand for subscription
+    - `:max_demand` - Maximum demand for subscription
+    - `:buffer_size` - Size of the buffer (default: 10000)
+    - `:buffer_keep` - Whether to keep `:first` or `:last` items when buffer is full (default: `:last`)
+
   """
 
   use GenStage
@@ -78,18 +86,28 @@ defmodule TheoryCraft.Stages.ProcessorStage do
         subscribe_to: [feed_stage]
       )
 
-      # With named stage
+      # With named stage and custom demand
       {:ok, stage} = ProcessorStage.start_link(
         {MyProcessor, [option: :value]},
         subscribe_to: [upstream_stage],
-        name: :my_processor
+        name: :my_processor,
+        min_demand: 5,
+        max_demand: 50
+      )
+
+      # With buffer configuration
+      {:ok, stage} = ProcessorStage.start_link(
+        {MyProcessor, [option: :value]},
+        subscribe_to: [upstream_stage],
+        buffer_size: 5000,
+        buffer_keep: :first
       )
 
   """
   @spec start_link(Processor.spec(), [start_option()]) :: GenServer.on_start()
   def start_link(processor_spec, opts) do
     {processor_module, processor_opts} = Utils.normalize_spec(processor_spec)
-    gen_stage_opts = Keyword.take(opts, [:name])
+    gen_stage_opts = StageHelpers.extract_gen_stage_opts(opts)
 
     GenStage.start_link(__MODULE__, {processor_module, processor_opts, opts}, gen_stage_opts)
   end
@@ -113,7 +131,12 @@ defmodule TheoryCraft.Stages.ProcessorStage do
 
           subscribe_to = Keyword.fetch!(stage_opts, :subscribe_to)
 
-          {:producer_consumer, state, subscribe_to: subscribe_to}
+          subscription_opts =
+            stage_opts
+            |> StageHelpers.extract_subscription_opts()
+            |> Keyword.merge(subscribe_to: subscribe_to)
+
+          {:producer_consumer, state, subscription_opts}
 
         error ->
           Logger.error("""
