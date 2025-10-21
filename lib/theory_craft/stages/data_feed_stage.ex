@@ -5,7 +5,7 @@ defmodule TheoryCraft.Stages.DataFeedStage do
   This stage acts as a producer in a GenStage pipeline, converting a DataFeed's
   enumerable stream into a demand-driven data source with backpressure support.
 
-  The stage wraps each tick or candle from the data source in a `MarketEvent` struct,
+  The stage wraps each tick or bar from the data source in a `MarketEvent` struct,
   associating it with a data stream name. This allows downstream processors to identify
   and process data from different sources.
 
@@ -47,7 +47,7 @@ defmodule TheoryCraft.Stages.DataFeedStage do
   The first parameter can be one of:
     - A tuple `{feed_module, feed_opts}` where `feed_module` implements the `TheoryCraft.DataFeed` behaviour
     - A module implementing the `TheoryCraft.DataFeed` behaviour (equivalent to `{feed_module, []}`)
-    - An `Enumerable` (e.g., list, stream) containing ticks or candles
+    - An `Enumerable` (e.g., list, stream) containing ticks or bars
 
   ## Options
 

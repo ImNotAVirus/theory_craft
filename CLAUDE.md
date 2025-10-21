@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TheoryCraft is an Elixir library for backtesting trading strategies using market data. It provides a streaming-based architecture for processing ticks and candles through configurable processors and data feeds.
+TheoryCraft is an Elixir library for backtesting trading strategies using market data. It provides a streaming-based architecture for processing ticks and bars through configurable processors and data feeds.
 
 ## Common Commands
 
@@ -45,20 +45,20 @@ The library uses a **streaming pipeline architecture** where market data flows t
 #### DataFeed Behaviour
 - Defines the contract for data sources (lib/theory_craft/data_feed.ex)
 - Implementations must provide `stream/1` and `stream!/1` functions
-- Returns `Enumerable.t(Tick.t() | Candle.t())`
+- Returns `Enumerable.t(Tick.t() | Bar.t())`
 - Current implementations:
-  - `MemoryDataFeed`: In-memory ETS-based storage for tick/candle data
+  - `MemoryDataFeed`: In-memory ETS-based storage for tick/bar data
   - `TicksCSVDataFeed`: Reads tick data from CSV files
 
 #### MarketEvent
 - Wrapper struct that flows through the processing pipeline (lib/theory_craft/market_event.ex)
-- Contains a `data` map where keys are data stream names and values are Tick/Candle structs
+- Contains a `data` map where keys are data stream names and values are Tick/Bar structs
 - Allows multiple data streams to be tracked simultaneously in the future
 
 #### Processor Behaviour
 - Transforms MarketEvents (lib/theory_craft/processor.ex)
 - Implements stateful stream processing with `init/1` and `next/2` callbacks
-- Example: `TickToCandleProcessor` resamples tick data into candles at specified timeframes
+- Example: `TickToBarProcessor` resamples tick data into bars at specified timeframes
 
 #### MarketSimulator
 - Main orchestration module (lib/theory_craft/market_simulator.ex)
@@ -66,7 +66,7 @@ The library uses a **streaming pipeline architecture** where market data flows t
   ```elixir
   %MarketSimulator{}
   |> add_data(stream, name: "xauusd_ticks")
-  |> resample("m5")  # Resample to 5-minute candles
+  |> resample("m5")  # Resample to 5-minute bars
   |> stream()
   ```
 - Currently supports one data feed at a time (will support multiple in future)
@@ -78,8 +78,8 @@ The library uses a **streaming pipeline architecture** where market data flows t
 - Represents a single market tick
 - Fields: `time`, `ask`, `bid`, `ask_volume`, `bid_volume`
 
-#### Candle (lib/theory_craft/candle.ex)
-- Represents OHLC candle data
+#### Bar (lib/theory_craft/bar.ex)
+- Represents OHLC bar data
 - Fields: `time`, `open`, `high`, `low`, `close`, `volume`
 
 #### TimeFrame (lib/theory_craft/time_frame.ex)
@@ -95,8 +95,8 @@ The library uses a **streaming pipeline architecture** where market data flows t
 - Stores data in compressed format using tuples instead of structs
 - Use `close/1` to clean up ETS tables when done
 
-#### TickToCandleProcessor
-- Handles tick-to-candle resampling with configurable timeframes
+#### TickToBarProcessor
+- Handles tick-to-bar resampling with configurable timeframes
 - Supports `price_type` option: `:mid`, `:bid`, or `:ask`
 - Supports `fake_volume?` option to generate volume of 1.0 per tick when volume data is missing
 - Manages `market_open` time to handle day transitions correctly for tick-based timeframes
@@ -110,13 +110,13 @@ lib/theory_craft/
 ├── market_simulator.ex           # Main orchestration
 ├── market_event.ex               # Event wrapper
 ├── tick.ex                       # Tick data structure
-├── candle.ex                     # Candle data structure
+├── bar.ex                     # Bar data structure
 ├── time_frame.ex                 # TimeFrame parsing
 ├── data_feeds/
 │   ├── memory_data_feed.ex      # ETS-based in-memory feed
 │   └── ticks_csv_data_feed.ex   # CSV file reader
 └── processors/
-    └── tick_to_candle_processor.ex  # Tick resampling
+    └── tick_to_bar_processor.ex  # Tick resampling
 ```
 
 ## Dependencies
@@ -677,7 +677,7 @@ lib/theory_craft/
 
        {:ok, processor} =
          ProcessorStage.start_link(  # ✅ Direct call to module being tested
-           {TickToCandleProcessor, [data: "xauusd", timeframe: "m5", name: "xauusd"]},
+           {TickToBarProcessor, [data: "xauusd", timeframe: "m5", name: "xauusd"]},
            subscribe_to: [producer]
          )
        # ...
@@ -718,8 +718,8 @@ lib/theory_craft/
 - Example workflow:
   ```bash
   # After modifying Elixir files
-  mix format lib/theory_craft/processors/tick_to_candle_processor.ex
-  mix format test/theory_craft/processors/tick_to_candle_processor_test.exs
+  mix format lib/theory_craft/processors/tick_to_bar_processor.ex
+  mix format test/theory_craft/processors/tick_to_bar_processor_test.exs
 
   # Or format all Elixir files in the project
   mix format

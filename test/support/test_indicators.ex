@@ -57,10 +57,10 @@ defmodule TheoryCraft.TestIndicators do
       # Extract value from event
       value = event.data[data_name]
 
-      # Extract close price from candle
+      # Extract close price from bar
       close =
         case value do
-          %TheoryCraft.Candle{close: close} -> close
+          %TheoryCraft.Bar{close: close} -> close
           %{close: close} -> close
           v when is_number(v) -> v
           _ -> 0.0

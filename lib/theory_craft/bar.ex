@@ -1,6 +1,6 @@
-defmodule TheoryCraft.Candle do
+defmodule TheoryCraft.Bar do
   @moduledoc """
-  Represents a market candle with open/high/low/close prices and volumes.
+  Represents a market bar with open/high/low/close prices and volumes.
   """
 
   alias __MODULE__
@@ -16,7 +16,7 @@ defmodule TheoryCraft.Candle do
     new_market?: false
   ]
 
-  @type t :: %Candle{
+  @type t :: %Bar{
           ## Base
           time: DateTime.t(),
           open: float() | nil,

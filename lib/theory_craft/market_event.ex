@@ -1,6 +1,6 @@
 defmodule TheoryCraft.MarketEvent do
   @moduledoc """
-  Represents a market event containing a tick or candle and associated metadata.
+  Represents a market event containing a tick or bar and associated metadata.
   """
 
   alias __MODULE__

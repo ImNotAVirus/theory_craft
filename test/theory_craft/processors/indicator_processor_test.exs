@@ -1,7 +1,7 @@
 defmodule TheoryCraft.Processors.IndicatorProcessorTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.{Candle, MarketEvent}
+  alias TheoryCraft.{Bar, MarketEvent}
   alias TheoryCraft.Processors.IndicatorProcessor
 
   ## Mocks
@@ -81,7 +81,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     end
 
     test "raises error when module option is missing" do
-      opts = [data: "candle", name: "test"]
+      opts = [data: "bar", name: "test"]
 
       assert_raise ArgumentError, ~r/Missing required option: module/, fn ->
         IndicatorProcessor.init(opts)
@@ -89,7 +89,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     end
 
     test "propagates indicator init errors" do
-      opts = [module: FailingInitIndicator, data: "candle", name: "fail"]
+      opts = [module: FailingInitIndicator, data: "bar", name: "fail"]
 
       assert {:error, :init_failed} = IndicatorProcessor.init(opts)
     end
@@ -99,8 +99,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     test "calls indicator module next with event and state" do
       {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
 
-      candle = build_candle(~U[2024-01-01 10:00:00Z])
-      event = %MarketEvent{data: %{"candle" => candle}}
+      bar = build_bar(~U[2024-01-01 10:00:00Z])
+      event = %MarketEvent{data: %{"bar" => bar}}
 
       assert {:ok, updated_event, new_state} = IndicatorProcessor.next(event, state)
 
@@ -120,8 +120,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     test "maintains indicator state across multiple calls" do
       {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
 
-      candle = build_candle(~U[2024-01-01 10:00:00Z])
-      event = %MarketEvent{data: %{"candle" => candle}}
+      bar = build_bar(~U[2024-01-01 10:00:00Z])
+      event = %MarketEvent{data: %{"bar" => bar}}
 
       # First call
       {:ok, event1, state1} = IndicatorProcessor.next(event, state)
@@ -142,8 +142,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     test "propagates indicator next errors" do
       {:ok, state} = IndicatorProcessor.init(module: FailingNextIndicator)
 
-      candle = build_candle(~U[2024-01-01 10:00:00Z])
-      event = %MarketEvent{data: %{"candle" => candle}}
+      bar = build_bar(~U[2024-01-01 10:00:00Z])
+      event = %MarketEvent{data: %{"bar" => bar}}
 
       assert {:error, :next_failed} = IndicatorProcessor.next(event, state)
     end
@@ -151,13 +151,13 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     test "returns updated event from indicator" do
       {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
 
-      candle = build_candle(~U[2024-01-01 10:00:00Z])
-      event = %MarketEvent{data: %{"candle" => candle, "other" => 123}}
+      bar = build_bar(~U[2024-01-01 10:00:00Z])
+      event = %MarketEvent{data: %{"bar" => bar, "other" => 123}}
 
       {:ok, updated_event, _new_state} = IndicatorProcessor.next(event, state)
 
       # Original data should be preserved
-      assert updated_event.data["candle"] == candle
+      assert updated_event.data["bar"] == bar
       assert updated_event.data["other"] == 123
       # New data added by indicator
       assert updated_event.data["mock_output"] == 0
@@ -166,8 +166,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
 
   ## Private test helpers
 
-  defp build_candle(time) do
-    %Candle{
+  defp build_bar(time) do
+    %Bar{
       time: time,
       open: 100.0,
       high: 100.0,

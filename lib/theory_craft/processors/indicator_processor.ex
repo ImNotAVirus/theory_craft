@@ -33,7 +33,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
       )
 
       # Process an event through the indicator
-      event = %MarketEvent{data: %{"eurusd_m5" => candle}}
+      event = %MarketEvent{data: %{"eurusd_m5" => bar}}
       {:ok, updated_event, new_state} = IndicatorProcessor.next(event, processor_state)
 
       # The updated event now contains the indicator output
@@ -45,7 +45,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   wrap them in an `IndicatorProcessor`:
 
       simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(candle_stream, name: "eurusd_m5")
+      |> MarketSimulator.add_data(bar_stream, name: "eurusd_m5")
       |> MarketSimulator.add_indicator(MyIndicators.SMA, period: 20, name: "sma20")
       |> MarketSimulator.stream()
 
@@ -161,7 +161,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
         period: 5
       )
 
-      candle = %TheoryCraft.Candle{
+      bar = %TheoryCraft.Bar{
         time: ~U[2024-01-01 10:00:00Z],
         open: 100.0,
         high: 102.0,
@@ -170,14 +170,14 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
         volume: 1000.0
       }
 
-      event = %MarketEvent{data: %{"eurusd_m5" => candle}}
+      event = %MarketEvent{data: %{"eurusd_m5" => bar}}
       {:ok, updated_event, new_state} = IndicatorProcessor.next(event, state)
 
       # The indicator has added its output to the event
       updated_event.data["sma5"]  # => SMA value calculated by the indicator
 
       # Process another event
-      event2 = %MarketEvent{data: %{"eurusd_m5" => updated_candle}}
+      event2 = %MarketEvent{data: %{"eurusd_m5" => updated_bar}}
       {:ok, updated_event2, newer_state} = IndicatorProcessor.next(event2, new_state)
 
   """

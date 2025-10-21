@@ -3,7 +3,7 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
 
   alias TheoryCraft.Stages.DataFeedStage
   alias TheoryCraft.DataFeeds.MemoryDataFeed
-  alias TheoryCraft.{Tick, Candle, MarketEvent}
+  alias TheoryCraft.{Tick, Bar, MarketEvent}
   alias TheoryCraft.TestHelpers.TestEventConsumer
 
   ## Setup
@@ -13,17 +13,17 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
     # Note: async: true means each test runs in its own process,
     # but they can all read from the same ETS tables created here
     ticks = sample_ticks()
-    candles = sample_candles()
+    bars = sample_bars()
 
     tick_feed = MemoryDataFeed.new(ticks)
-    candle_feed = MemoryDataFeed.new(candles)
+    bar_feed = MemoryDataFeed.new(bars)
     empty_feed = MemoryDataFeed.new([])
 
     %{
       ticks: ticks,
-      candles: candles,
+      bars: bars,
       tick_feed: tick_feed,
-      candle_feed: candle_feed,
+      bar_feed: bar_feed,
       empty_feed: empty_feed
     }
   end
@@ -42,10 +42,10 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       assert Process.alive?(stage)
     end
 
-    test "successfully starts with MemoryDataFeed and candle data", %{candle_feed: candle_feed} do
+    test "successfully starts with MemoryDataFeed and bar data", %{bar_feed: bar_feed} do
       assert {:ok, stage} =
                DataFeedStage.start_link(
-                 {MemoryDataFeed, [from: candle_feed]},
+                 {MemoryDataFeed, [from: bar_feed]},
                  name: "xauusd"
                )
 
@@ -146,7 +146,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       first_event = List.first(events)
       assert %MarketEvent{} = first_event
       assert %Tick{} = first_event.data["xauusd"]
-
     end
 
     test "produces all events in order", %{producer: producer} do
@@ -167,7 +166,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
         assert %MarketEvent{} = received_event
         assert received_event.data["xauusd"] == expected_tick
       end
-
     end
 
     test "handles backpressure with small demand", %{producer: producer} do
@@ -182,7 +180,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       # Should receive events in small batches
       assert_receive {:events, events}, 1000
       assert length(events) <= 2
-
     end
 
     test "completes when stream is exhausted", %{producer: producer} do
@@ -200,7 +197,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       # Should have received all events
       expected_ticks = sample_ticks()
       assert length(all_events) == length(expected_ticks)
-
     end
   end
 
@@ -241,7 +237,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       # Together they should have received all 4 ticks
       total_events = length(events1) + length(events2)
       assert total_events == 4
-
     end
   end
 
@@ -260,7 +255,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
 
       # Should receive completion without any events
       assert_receive {:producer_done, :normal}, 1000
-
     end
   end
 
@@ -287,7 +281,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
         assert %MarketEvent{} = received_event
         assert received_event.data["xauusd"] == expected_tick
       end
-
     end
 
     test "produces events with Enumerable (list)" do
@@ -311,7 +304,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
         assert %MarketEvent{} = received_event
         assert received_event.data["xauusd"] == expected_tick
       end
-
     end
 
     test "produces events with Enumerable (stream)" do
@@ -336,7 +328,6 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
         assert %MarketEvent{} = received_event
         assert received_event.data["xauusd"] == expected_tick
       end
-
     end
   end
 
@@ -377,11 +368,11 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
     ]
   end
 
-  defp sample_candles do
+  defp sample_bars do
     base_time = ~U[2025-09-04 10:00:00.000Z]
 
     [
-      %Candle{
+      %Bar{
         time: DateTime.add(base_time, 0, :minute),
         open: 1.2340,
         high: 1.2350,
@@ -389,7 +380,7 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
         close: 1.2345,
         volume: 5000.0
       },
-      %Candle{
+      %Bar{
         time: DateTime.add(base_time, 1, :minute),
         open: 1.2345,
         high: 1.2355,
@@ -439,5 +430,4 @@ defmodule TheoryCraft.Stages.DataFeedStageTest do
       500 -> acc
     end
   end
-
 end

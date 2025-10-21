@@ -9,8 +9,8 @@ defmodule TheoryCraft.MarketSimulator do
   ## Architecture
 
   The simulator uses a layered GenStage pipeline:
-  - **DataFeedStage**: Producer that emits market data (ticks, candles)
-  - **ProcessorStage**: Producer-consumer that transforms events (e.g., tick → candle)
+  - **DataFeedStage**: Producer that emits market data (ticks, bars)
+  - **ProcessorStage**: Producer-consumer that transforms events (e.g., tick → bar)
   - **BroadcastStage**: Broadcasts events to multiple parallel processors
   - **AggregatorStage**: Synchronizes and merges outputs from parallel processors
 
@@ -109,7 +109,7 @@ defmodule TheoryCraft.MarketSimulator do
   alias TheoryCraft.TimeFrame
   alias TheoryCraft.Processor
   alias TheoryCraft.Indicator
-  alias TheoryCraft.Processors.TickToCandleProcessor
+  alias TheoryCraft.Processors.TickToBarProcessor
   alias TheoryCraft.Processors.IndicatorProcessor
   alias TheoryCraft.DataFeeds.TicksCSVDataFeed
   alias TheoryCraft.Stages.DataFeedStage
@@ -180,7 +180,7 @@ defmodule TheoryCraft.MarketSimulator do
     - `simulator`: The market simulator.
     - `source`: Either:
       - A module implementing the `TheoryCraft.DataFeed` behaviour
-      - An `Enumerable` (list, stream, etc.) containing `Tick` or `Candle` structs
+      - An `Enumerable` (list, stream, etc.) containing `Tick` or `Bar` structs
     - `opts`: Options including:
       - `:name` - Optional name for this data stream (default: numeric index)
       - For DataFeed modules: other options are passed to the DataFeed module
@@ -270,7 +270,7 @@ defmodule TheoryCraft.MarketSimulator do
   @doc """
   Resamples the data to a different timeframe.
 
-  Creates a new processor layer with a single TickToCandleProcessor.
+  Creates a new processor layer with a single TickToBarProcessor.
 
   ## Default Names
 
@@ -330,7 +330,7 @@ defmodule TheoryCraft.MarketSimulator do
       |> Keyword.put(:data, data_name)
       |> Keyword.put(:name, output_name)
 
-    processor_spec = {TickToCandleProcessor, processor_opts}
+    processor_spec = {TickToBarProcessor, processor_opts}
 
     # Add new layer with single processor and track new data stream
     %MarketSimulator{

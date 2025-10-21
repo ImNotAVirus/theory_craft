@@ -4,7 +4,7 @@ defmodule TheoryCraft.MarketSimulatorTest do
   alias TheoryCraft.MarketSimulator
   alias TheoryCraft.MarketEvent
   alias TheoryCraft.Tick
-  alias TheoryCraft.Candle
+  alias TheoryCraft.Bar
   alias TheoryCraft.DataFeeds.MemoryDataFeed
   alias TheoryCraft.TestIndicators.SimpleIndicator
   alias TheoryCraft.TestIndicators.SMAIndicator
@@ -33,27 +33,27 @@ defmodule TheoryCraft.MarketSimulatorTest do
         |> MarketSimulator.stream()
         |> Enum.to_list()
 
-      # Should have 5 events (one per tick, each with current candle state)
+      # Should have 5 events (one per tick, each with current bar state)
       assert length(events) == 5
 
-      # All events should have candles
+      # All events should have bars
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = candle
+        assert %Bar{} = bar
       end
 
-      # First 3 events should have candle at 00:00 (ticks at 00:00, 00:01, 00:02)
+      # First 3 events should have bar at 00:00 (ticks at 00:00, 00:01, 00:02)
       for i <- 0..2 do
-        assert %MarketEvent{data: %{"xauusd_m5" => candle}} = Enum.at(events, i)
-        assert candle.time == ~U[2024-01-01 00:00:00.000000Z]
+        assert %MarketEvent{data: %{"xauusd_m5" => bar}} = Enum.at(events, i)
+        assert bar.time == ~U[2024-01-01 00:00:00.000000Z]
       end
 
-      # Last 2 events should have candle at 00:05 (ticks at 00:05, 00:06)
+      # Last 2 events should have bar at 00:05 (ticks at 00:05, 00:06)
       for i <- 3..4 do
-        assert %MarketEvent{data: %{"xauusd_m5" => candle}} = Enum.at(events, i)
-        assert candle.time == ~U[2024-01-01 00:05:00.000000Z]
+        assert %MarketEvent{data: %{"xauusd_m5" => bar}} = Enum.at(events, i)
+        assert bar.time == ~U[2024-01-01 00:05:00.000000Z]
       end
     end
 
@@ -69,14 +69,14 @@ defmodule TheoryCraft.MarketSimulatorTest do
       # Should have 5 events (one per tick flowing through the pipeline)
       assert length(events) == 5
 
-      # All events should have tick and all candles
+      # All events should have tick and all bars
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m1" => m1_candle}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => m5_candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m1" => m1_bar}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => m5_bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = m1_candle
-        assert %Candle{} = m5_candle
+        assert %Bar{} = m1_bar
+        assert %Bar{} = m5_bar
       end
     end
 
@@ -98,11 +98,11 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => m5_candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => m5_bar}} = event
         assert %MarketEvent{data: %{"indicator1" => ind1_value}} = event
         assert %MarketEvent{data: %{"indicator2" => ind2_value}} = event
         assert %Tick{} = tick
-        assert %Candle{} = m5_candle
+        assert %Bar{} = m5_bar
         assert ind1_value == 10.0
         assert ind2_value == 20.0
       end
@@ -126,15 +126,15 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m1" => m1_candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m1" => m1_bar}} = event
         assert %MarketEvent{data: %{"ind1" => ind1_value}} = event
         assert %MarketEvent{data: %{"ind2" => ind2_value}} = event
-        assert %MarketEvent{data: %{"final" => final_candle}} = event
+        assert %MarketEvent{data: %{"final" => final_bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = m1_candle
+        assert %Bar{} = m1_bar
         assert ind1_value == 5.0
         assert is_number(ind2_value)
-        assert %Candle{} = final_candle
+        assert %Bar{} = final_bar
       end
     end
 
@@ -166,10 +166,10 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => m5_candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => m5_bar}} = event
         assert %MarketEvent{data: %{"indicator" => indicator_value}} = event
         assert %Tick{} = tick
-        assert %Candle{} = m5_candle
+        assert %Bar{} = m5_bar
         assert indicator_value == 15.0
       end
     end
@@ -241,12 +241,12 @@ defmodule TheoryCraft.MarketSimulatorTest do
       # Should have 5 events (one per tick)
       assert length(events) == 5
 
-      # All events should have candles
+      # All events should have bars
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = candle
+        assert %Bar{} = bar
       end
     end
 
@@ -263,12 +263,12 @@ defmodule TheoryCraft.MarketSimulatorTest do
       # Should have 5 events (one per tick)
       assert length(events) == 5
 
-      # All events should have candles
+      # All events should have bars
       for event <- events do
         assert %MarketEvent{data: %{"xauusd" => tick}} = event
-        assert %MarketEvent{data: %{"xauusd_m5" => candle}} = event
+        assert %MarketEvent{data: %{"xauusd_m5" => bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = candle
+        assert %Bar{} = bar
       end
     end
 
@@ -370,11 +370,11 @@ defmodule TheoryCraft.MarketSimulatorTest do
       # All events should have the data streams
       for event <- events do
         assert %MarketEvent{data: %{"XAUUSD" => tick}} = event
-        assert %MarketEvent{data: %{"XAUUSD_m5" => m5_candle}} = event
-        assert %MarketEvent{data: %{"XAUUSD_h1" => h1_candle}} = event
+        assert %MarketEvent{data: %{"XAUUSD_m5" => m5_bar}} = event
+        assert %MarketEvent{data: %{"XAUUSD_h1" => h1_bar}} = event
         assert %Tick{} = tick
-        assert %Candle{} = m5_candle
-        assert %Candle{} = h1_candle
+        assert %Bar{} = m5_bar
+        assert %Bar{} = h1_bar
       end
     end
   end

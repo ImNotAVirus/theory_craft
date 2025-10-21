@@ -9,7 +9,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   use TheoryCraft.DataFeed
 
   alias __MODULE__
-  alias TheoryCraft.{Candle, Tick}
+  alias TheoryCraft.{Bar, Tick}
   alias TheoryCraft.DataFeed
 
   defstruct [:table, :precision]
@@ -98,15 +98,15 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   defp fill_table(table, enumerable, precision) do
     enumerable
     |> Enum.with_index()
-    |> Enum.each(fn {candle, index} ->
-      :ets.insert(table, dump(candle, index, precision))
+    |> Enum.each(fn {bar, index} ->
+      :ets.insert(table, dump(bar, index, precision))
     end)
   end
 
   defp get_precision(enumerable, :auto) do
     case Enum.take(enumerable, 1) do
       [] -> :millisecond
-      # Tick or Candle struct
+      # Tick or Bar struct
       [%{time: %DateTime{microsecond: {_, 0}}}] -> :second
       [%{time: %DateTime{microsecond: {_, 3}}}] -> :millisecond
       [%{time: %DateTime{microsecond: {_, 6}}}] -> :microsecond
@@ -129,15 +129,15 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
     {DateTime.to_unix(time, precision), ask, bid, ask_volume, bid_volume}
   end
 
-  defp dump(%Candle{} = candle, index, precision) do
-    %Candle{
+  defp dump(%Bar{} = bar, index, precision) do
+    %Bar{
       time: time,
       open: open,
       high: high,
       low: low,
       close: close,
       volume: volume
-    } = candle
+    } = bar
 
     {index, DateTime.to_unix(time, precision), open, high, low, close, volume}
   end
@@ -153,7 +153,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   end
 
   defp load({_index, time, open, high, low, close, volume}, precision) do
-    %Candle{
+    %Bar{
       time: DateTime.from_unix!(time, precision),
       open: open,
       high: high,

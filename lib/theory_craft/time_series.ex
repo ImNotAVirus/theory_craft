@@ -17,7 +17,7 @@ defmodule TheoryCraft.TimeSeries do
   ## Use Cases
 
   TimeSeries is ideal for:
-  - Storing market data (ticks, candles) with timestamps
+  - Storing market data (ticks, bars) with timestamps
   - Maintaining time-indexed technical indicators
   - Time series analysis where temporal lookups are needed
 

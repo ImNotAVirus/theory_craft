@@ -174,12 +174,12 @@ create_streamer = fn speed ->
   {:ok, streamer} =
     Streamer.start_link(resampled_stream,
       on_events: fn market_events ->
-        candles =
+        bars =
           for market_event <- market_events do
             market_event.data["data_#{timeframe}"]
           end
 
-        :ok = Chart.update_batch(chart, candles)
+        :ok = Chart.update_batch(chart, bars)
       end,
       mode: :manual,
       speed: speed

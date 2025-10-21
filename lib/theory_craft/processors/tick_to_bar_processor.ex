@@ -1,20 +1,20 @@
-defmodule TheoryCraft.Processors.TickToCandleProcessor do
+defmodule TheoryCraft.Processors.TickToBarProcessor do
   @moduledoc """
-  Transforms tick data into candle data with configurable timeframes.
+  Transforms tick data into bar data with configurable timeframes.
 
-  This processor converts a stream of `Tick` structs into `Candle` structs (OHLCV data)
+  This processor converts a stream of `Tick` structs into `Bar` structs (OHLCV data)
   by resampling at specified timeframe intervals. It supports all standard trading timeframes
-  from tick-based to monthly candles.
+  from tick-based to monthly bars.
 
   ## Supported Timeframes
 
-  - **Tick-based** (`t<N>`): Group N ticks into one candle (e.g., "t5" = 5 ticks per candle)
-  - **Second-based** (`s<N>`): N-second candles (e.g., "s5", "s30")
-  - **Minute-based** (`m<N>`): N-minute candles (e.g., "m1", "m5", "m15")
-  - **Hour-based** (`h<N>`): N-hour candles (e.g., "h1", "h4")
-  - **Daily** (`D<N>`): N-day candles (e.g., "D", "D3")
-  - **Weekly** (`W<N>`): N-week candles (e.g., "W", "W2")
-  - **Monthly** (`M<N>`): N-month candles (e.g., "M", "M3")
+  - **Tick-based** (`t<N>`): Group N ticks into one bar (e.g., "t5" = 5 ticks per bar)
+  - **Second-based** (`s<N>`): N-second bars (e.g., "s5", "s30")
+  - **Minute-based** (`m<N>`): N-minute bars (e.g., "m1", "m5", "m15")
+  - **Hour-based** (`h<N>`): N-hour bars (e.g., "h1", "h4")
+  - **Daily** (`D<N>`): N-day bars (e.g., "D", "D3")
+  - **Weekly** (`W<N>`): N-week bars (e.g., "W", "W2")
+  - **Monthly** (`M<N>`): N-month bars (e.g., "M", "M3")
 
   ## Options
 
@@ -36,31 +36,31 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
   ## Examples
 
-      # 5-minute candles with mid price
+      # 5-minute bars with mid price
       opts = [data: "eurusd", timeframe: "m5"]
-      {:ok, state} = TickToCandleProcessor.init(opts)
+      {:ok, state} = TickToBarProcessor.init(opts)
 
-      # Daily candles with bid price, market opens at 9:30
+      # Daily bars with bid price, market opens at 9:30
       opts = [
         data: "xauusd",
         timeframe: "D",
         price_type: :bid,
         market_open: ~T[09:30:00]
       ]
-      {:ok, state} = TickToCandleProcessor.init(opts)
+      {:ok, state} = TickToBarProcessor.init(opts)
 
-      # Weekly candles starting on Sunday
+      # Weekly bars starting on Sunday
       opts = [
         data: "btcusd",
         timeframe: "W",
         weekly_open: :sunday
       ]
-      {:ok, state} = TickToCandleProcessor.init(opts)
+      {:ok, state} = TickToBarProcessor.init(opts)
 
   """
 
   alias __MODULE__
-  alias TheoryCraft.{Candle, Tick}
+  alias TheoryCraft.{Bar, Tick}
   alias TheoryCraft.MarketEvent
   alias TheoryCraft.TimeFrame
   alias TheoryCraft.Utils
@@ -68,7 +68,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   @behaviour TheoryCraft.Processor
 
   @typedoc """
-  The processor state containing configuration and current candle information.
+  The processor state containing configuration and current bar information.
   """
   @type t :: %__MODULE__{
           name: String.t(),
@@ -77,7 +77,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
           weekly_open:
             :monday | :tuesday | :wednesday | :thursday | :friday | :saturday | :sunday,
           timeframe: TimeFrame.t(),
-          current_candle: Candle.t() | nil,
+          current_bar: Bar.t() | nil,
           next_time: DateTime.t() | nil,
           tick_counter: non_neg_integer() | nil,
           price_type: :mid | :bid | :ask,
@@ -89,8 +89,8 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
             market_open: nil,
             weekly_open: nil,
             timeframe: nil,
-            current_candle: nil,
-            # Used to track the next candle's opening time (only for candles)
+            current_bar: nil,
+            # Used to track the next bar's opening time (only for bars)
             next_time: nil,
             # Used to count the number of ticks received (only for tick timeframe)
             tick_counter: nil,
@@ -116,11 +116,11 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
   ## Examples
 
-      iex> TickToCandleProcessor.init(data: "eurusd", timeframe: "m5")
-      {:ok, %TickToCandleProcessor{data_name: "eurusd", timeframe: {"m", 5}, ...}}
+      iex> TickToBarProcessor.init(data: "eurusd", timeframe: "m5")
+      {:ok, %TickToBarProcessor{data_name: "eurusd", timeframe: {"m", 5}, ...}}
 
-      iex> TickToCandleProcessor.init(data: "xauusd", timeframe: "D", price_type: :bid)
-      {:ok, %TickToCandleProcessor{data_name: "xauusd", price_type: :bid, ...}}
+      iex> TickToBarProcessor.init(data: "xauusd", timeframe: "D", price_type: :bid)
+      {:ok, %TickToBarProcessor{data_name: "xauusd", price_type: :bid, ...}}
 
   """
   @impl true
@@ -136,7 +136,7 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     weekly_open = Keyword.get(opts, :weekly_open, :monday)
     timeframe = TimeFrame.parse!(timeframe_from_user)
 
-    state = %TickToCandleProcessor{
+    state = %TickToBarProcessor{
       name: name,
       data_name: data_name,
       market_open: market_open,
@@ -150,57 +150,57 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   end
 
   @doc """
-  Processes a MarketEvent containing Tick data and transforms it into Candle data.
+  Processes a MarketEvent containing Tick data and transforms it into Bar data.
 
   This function handles the transformation based on the configured timeframe:
 
-  - **Tick-based timeframes** (`t<N>`): Accumulates N ticks before creating a new candle.
-    Also handles market_open transitions by starting a new candle when crossing market open time.
+  - **Tick-based timeframes** (`t<N>`): Accumulates N ticks before creating a new bar.
+    Also handles market_open transitions by starting a new bar when crossing market open time.
 
-  - **Time-based timeframes** (`s`, `m`, `h`, `D`, `W`, `M`): Creates candles aligned to
-    timeframe boundaries. Starts a new candle when the tick's time crosses the `next_time`.
+  - **Time-based timeframes** (`s`, `m`, `h`, `D`, `W`, `M`): Creates bars aligned to
+    timeframe boundaries. Starts a new bar when the tick's time crosses the `next_time`.
 
   The function reads Tick data from the `:data` key in the MarketEvent and writes the generated
-  Candle data to the `:name` key. This allows the input ticks and output candles to coexist in
-  the event's data map. If `:name` equals `:data`, the ticks will be overwritten by the candles.
+  Bar data to the `:name` key. This allows the input ticks and output bars to coexist in
+  the event's data map. If `:name` equals `:data`, the ticks will be overwritten by the bars.
 
   ## Behavior
 
-  - **First tick**: Creates the initial candle with OHLC all set to the tick's price
-  - **Within period**: Updates the current candle's high, low, close, and volume
-  - **Period boundary**: Creates a new candle and resets accumulation
+  - **First tick**: Creates the initial bar with OHLC all set to the tick's price
+  - **Within period**: Updates the current bar's high, low, close, and volume
+  - **Period boundary**: Creates a new bar and resets accumulation
 
   ## Examples
 
       # Processing first tick (5-minute timeframe)
       # By default, name is "eurusd_m5" when data is "eurusd"
       event = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:07:30Z], bid: 1.0850, ask: 1.0852}}}
-      {:ok, state} = TickToCandleProcessor.init(data: "eurusd", timeframe: "m5")
-      {:ok, new_event, new_state} = TickToCandleProcessor.next(event, state)
-      # new_event.data["eurusd_m5"] is a Candle at time 10:05:00 with OHLC = 1.0851
+      {:ok, state} = TickToBarProcessor.init(data: "eurusd", timeframe: "m5")
+      {:ok, new_event, new_state} = TickToBarProcessor.next(event, state)
+      # new_event.data["eurusd_m5"] is a Bar at time 10:05:00 with OHLC = 1.0851
       # new_event.data["eurusd"] still contains the original Tick
 
       # Processing tick within same period
       event2 = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:08:00Z], bid: 1.0855, ask: 1.0857}}}
-      {:ok, new_event2, new_state2} = TickToCandleProcessor.next(event2, new_state)
-      # new_event2.data["eurusd_m5"] updates the same candle with new high/close
+      {:ok, new_event2, new_state2} = TickToBarProcessor.next(event2, new_state)
+      # new_event2.data["eurusd_m5"] updates the same bar with new high/close
 
-      # Crossing boundary creates new candle
+      # Crossing boundary creates new bar
       event3 = %MarketEvent{data: %{"eurusd" => %Tick{time: ~U[2024-01-15 10:10:00Z], bid: 1.0860, ask: 1.0862}}}
-      {:ok, new_event3, new_state3} = TickToCandleProcessor.next(event3, new_state2)
-      # new_event3.data["eurusd_m5"] is a NEW Candle at time 10:10:00
+      {:ok, new_event3, new_state3} = TickToBarProcessor.next(event3, new_state2)
+      # new_event3.data["eurusd_m5"] is a NEW Bar at time 10:10:00
 
-      # Using explicit name to preserve both ticks and candles
-      {:ok, state} = TickToCandleProcessor.init(data: "xauusd_ticks", timeframe: "h1", name: "xauusd_h1")
+      # Using explicit name to preserve both ticks and bars
+      {:ok, state} = TickToBarProcessor.init(data: "xauusd_ticks", timeframe: "h1", name: "xauusd_h1")
       # Input: event.data["xauusd_ticks"] contains Tick
-      # Output: event.data["xauusd_h1"] will contain Candle
+      # Output: event.data["xauusd_h1"] will contain Bar
       # Both coexist in the same MarketEvent
 
   """
   @impl true
   @spec next(MarketEvent.t(), t()) :: {:ok, MarketEvent.t(), t()}
-  def next(event, %TickToCandleProcessor{timeframe: {"t", _mult}, tick_counter: nil} = state) do
-    %TickToCandleProcessor{
+  def next(event, %TickToBarProcessor{timeframe: {"t", _mult}, tick_counter: nil} = state) do
+    %TickToBarProcessor{
       name: name,
       data_name: data_name,
       price_type: price_type,
@@ -209,41 +209,41 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
     tick = market_data_tick!(event, data_name)
     # First tick is always a new bar and not a new market
-    candle = create_candle_from_tick(tick.time, tick, price_type, fake_volume?, false)
+    bar = create_bar_from_tick(tick.time, tick, price_type, fake_volume?, false)
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
-    updated_state = %TickToCandleProcessor{state | tick_counter: 1, current_candle: candle}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, bar)}
+    updated_state = %TickToBarProcessor{state | tick_counter: 1, current_bar: bar}
 
     {:ok, updated_event, updated_state}
   end
 
   @impl true
-  def next(event, %TickToCandleProcessor{timeframe: {"t", _mult}} = state) do
-    %TickToCandleProcessor{
+  def next(event, %TickToBarProcessor{timeframe: {"t", _mult}} = state) do
+    %TickToBarProcessor{
       name: name,
       data_name: data_name,
       price_type: price_type,
-      current_candle: current_candle,
+      current_bar: current_bar,
       fake_volume?: fake_volume?,
       tick_counter: tick_counter
     } = state
 
     tick = market_data_tick!(event, data_name)
-    new_candle? = new_candle?(tick, state)
-    new_market? = if new_candle?, do: new_market?(tick, state), else: false
+    new_bar? = new_bar?(tick, state)
+    new_market? = if new_bar?, do: new_market?(tick, state), else: false
 
-    candle =
-      case new_candle? do
-        true -> create_candle_from_tick(tick.time, tick, price_type, fake_volume?, new_market?)
-        false -> update_candle_from_tick(current_candle, tick, price_type, fake_volume?)
+    bar =
+      case new_bar? do
+        true -> create_bar_from_tick(tick.time, tick, price_type, fake_volume?, new_market?)
+        false -> update_bar_from_tick(current_bar, tick, price_type, fake_volume?)
       end
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, bar)}
 
-    updated_state = %TickToCandleProcessor{
+    updated_state = %TickToBarProcessor{
       state
-      | tick_counter: if(new_candle?, do: 1, else: tick_counter + 1),
-        current_candle: candle
+      | tick_counter: if(new_bar?, do: 1, else: tick_counter + 1),
+        current_bar: bar
     }
 
     {:ok, updated_event, updated_state}
@@ -251,9 +251,9 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
 
   # First tick for time-based timeframe (s, m, h, D, W, M)
   @impl true
-  def next(event, %TickToCandleProcessor{timeframe: {unit, _mult}, next_time: nil} = state)
+  def next(event, %TickToBarProcessor{timeframe: {unit, _mult}, next_time: nil} = state)
       when unit in ["s", "m", "h", "D", "W", "M"] do
-    %TickToCandleProcessor{
+    %TickToBarProcessor{
       name: name,
       data_name: data_name,
       price_type: price_type,
@@ -266,53 +266,53 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     aligned_time = align_time(tick.time, timeframe, state)
 
     # First tick is always a new bar and not a new market
-    candle = create_candle_from_tick(aligned_time, tick, price_type, fake_volume?, false)
+    bar = create_bar_from_tick(aligned_time, tick, price_type, fake_volume?, false)
 
-    next_time = calculate_next_candle_time(aligned_time, timeframe, market_open)
+    next_time = calculate_next_bar_time(aligned_time, timeframe, market_open)
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
-    updated_state = %TickToCandleProcessor{state | next_time: next_time, current_candle: candle}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, bar)}
+    updated_state = %TickToBarProcessor{state | next_time: next_time, current_bar: bar}
 
     {:ok, updated_event, updated_state}
   end
 
   # Subsequent ticks for time-based timeframe (s, m, h, D, W, M)
   @impl true
-  def next(event, %TickToCandleProcessor{timeframe: {unit, _mult}} = state)
+  def next(event, %TickToBarProcessor{timeframe: {unit, _mult}} = state)
       when unit in ["s", "m", "h", "D", "W", "M"] do
-    %TickToCandleProcessor{
+    %TickToBarProcessor{
       name: name,
       data_name: data_name,
       price_type: price_type,
-      current_candle: current_candle,
+      current_bar: current_bar,
       fake_volume?: fake_volume?,
       timeframe: timeframe,
       market_open: market_open
     } = state
 
     tick = market_data_tick!(event, data_name)
-    new_candle? = new_candle?(tick, state)
-    new_market? = if new_candle?, do: new_market?(tick, state), else: false
+    new_bar? = new_bar?(tick, state)
+    new_market? = if new_bar?, do: new_market?(tick, state), else: false
 
-    {candle, next_time} =
-      case new_candle? do
+    {bar, next_time} =
+      case new_bar? do
         true ->
           aligned_time = align_time(tick.time, timeframe, state)
 
-          new_candle =
-            create_candle_from_tick(aligned_time, tick, price_type, fake_volume?, new_market?)
+          new_bar =
+            create_bar_from_tick(aligned_time, tick, price_type, fake_volume?, new_market?)
 
-          next_time = calculate_next_candle_time(aligned_time, timeframe, market_open)
+          next_time = calculate_next_bar_time(aligned_time, timeframe, market_open)
 
-          {new_candle, next_time}
+          {new_bar, next_time}
 
         false ->
-          updated_candle = update_candle_from_tick(current_candle, tick, price_type, fake_volume?)
-          {updated_candle, state.next_time}
+          updated_bar = update_bar_from_tick(current_bar, tick, price_type, fake_volume?)
+          {updated_bar, state.next_time}
       end
 
-    updated_event = %MarketEvent{event | data: Map.put(event.data, name, candle)}
-    updated_state = %TickToCandleProcessor{state | next_time: next_time, current_candle: candle}
+    updated_event = %MarketEvent{event | data: Map.put(event.data, name, bar)}
+    updated_state = %TickToBarProcessor{state | next_time: next_time, current_bar: bar}
 
     {:ok, updated_event, updated_state}
   end
@@ -348,23 +348,23 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   end
 
   # Tick-based timeframe
-  defp new_candle?(%Tick{} = tick, %TickToCandleProcessor{timeframe: {"t", mult}} = state) do
+  defp new_bar?(%Tick{} = tick, %TickToBarProcessor{timeframe: {"t", mult}} = state) do
     %Tick{time: time} = tick
 
-    %TickToCandleProcessor{
+    %TickToBarProcessor{
       tick_counter: counter,
       market_open: market_open,
-      current_candle: %Candle{time: candle_dt}
+      current_bar: %Bar{time: bar_dt}
     } = state
 
-    candle_time = DateTime.to_time(candle_dt)
+    bar_time = DateTime.to_time(bar_dt)
     tick_time = DateTime.to_time(time)
 
     cond do
       counter >= mult ->
         true
 
-      Time.compare(candle_time, market_open) == :lt and
+      Time.compare(bar_time, market_open) == :lt and
           Time.compare(tick_time, market_open) != :lt ->
         true
 
@@ -374,22 +374,22 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
   end
 
   # Time-based timeframe (s, m, h, D, W, M)
-  defp new_candle?(%Tick{time: time}, %TickToCandleProcessor{next_time: next_time}) do
+  defp new_bar?(%Tick{time: time}, %TickToBarProcessor{next_time: next_time}) do
     DateTime.compare(time, next_time) != :lt
   end
 
   # Check if tick crosses market_open boundary
   defp new_market?(
          %Tick{time: tick_time},
-         %TickToCandleProcessor{
+         %TickToBarProcessor{
            market_open: market_open,
-           current_candle: %Candle{time: candle_dt}
+           current_bar: %Bar{time: bar_dt}
          }
        ) do
-    candle_time = DateTime.to_time(candle_dt)
+    bar_time = DateTime.to_time(bar_dt)
     tick_time_only = DateTime.to_time(tick_time)
 
-    Time.compare(candle_time, market_open) == :lt and
+    Time.compare(bar_time, market_open) == :lt and
       Time.compare(tick_time_only, market_open) != :lt
   end
 
@@ -558,10 +558,10 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     end
   end
 
-  # Calculate next candle time
+  # Calculate next bar time
   # For intra-day timeframes (s/m/h), considers market_open
   # For D/W/M, market_open is already part of alignment
-  defp calculate_next_candle_time(aligned_time, timeframe, market_open) do
+  defp calculate_next_bar_time(aligned_time, timeframe, market_open) do
     case timeframe do
       {unit, _mult} when unit in ["s", "m", "h"] ->
         calculate_next_time(aligned_time, timeframe, market_open)
@@ -571,11 +571,11 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     end
   end
 
-  defp create_candle_from_tick(time, tick, price_type, fake_volume?, new_market?) do
+  defp create_bar_from_tick(time, tick, price_type, fake_volume?, new_market?) do
     price = tick_price(tick, price_type)
     volume = volume(tick, fake_volume?)
 
-    %Candle{
+    %Bar{
       time: time,
       open: price,
       high: price,
@@ -587,8 +587,8 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
     }
   end
 
-  defp update_candle_from_tick(candle, tick, price_type, fake_volume?) do
-    %Candle{volume: prev_volume, high: high, low: low} = candle
+  defp update_bar_from_tick(bar, tick, price_type, fake_volume?) do
+    %Bar{volume: prev_volume, high: high, low: low} = bar
 
     price = tick_price(tick, price_type)
     volume = volume(tick, fake_volume?)
@@ -601,8 +601,8 @@ defmodule TheoryCraft.Processors.TickToCandleProcessor do
         {prev_volume, volume} -> prev_volume + volume
       end
 
-    %Candle{
-      candle
+    %Bar{
+      bar
       | high: max(high, price),
         low: min(low, price),
         close: price,

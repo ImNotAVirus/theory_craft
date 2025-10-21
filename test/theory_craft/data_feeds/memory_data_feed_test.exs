@@ -2,7 +2,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.DataFeeds.MemoryDataFeed
-  alias TheoryCraft.{Tick, Candle}
+  alias TheoryCraft.{Tick, Bar}
 
   ## Setup
 
@@ -11,22 +11,22 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
     # Note: async: true means each test runs in its own process,
     # but they can all read from the same ETS tables created here
     ticks = sample_ticks()
-    candles = sample_candles()
+    bars = sample_bars()
     ticks_us = sample_ticks_microsecond()
     ticks_sec = sample_ticks_second()
 
     tick_feed = MemoryDataFeed.new(ticks)
-    candle_feed = MemoryDataFeed.new(candles)
+    bar_feed = MemoryDataFeed.new(bars)
     tick_feed_us = MemoryDataFeed.new(ticks_us, :microsecond)
     tick_feed_sec = MemoryDataFeed.new(ticks_sec, :auto)
 
     %{
       ticks: ticks,
-      candles: candles,
+      bars: bars,
       ticks_us: ticks_us,
       ticks_sec: ticks_sec,
       tick_feed: tick_feed,
-      candle_feed: candle_feed,
+      bar_feed: bar_feed,
       tick_feed_us: tick_feed_us,
       tick_feed_sec: tick_feed_sec
     }
@@ -43,8 +43,8 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
       assert is_reference(memory_feed.table)
     end
 
-    test "creates MemoryDataFeed from enumerable candle data with default precision" do
-      memory_feed = MemoryDataFeed.new(sample_candles())
+    test "creates MemoryDataFeed from enumerable bar data with default precision" do
+      memory_feed = MemoryDataFeed.new(sample_bars())
 
       assert %MemoryDataFeed{} = memory_feed
       assert memory_feed.precision == :millisecond
@@ -134,15 +134,15 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
       end
     end
 
-    test "streams all candle data from memory in order", %{
-      candle_feed: candle_feed,
-      candles: candles
+    test "streams all bar data from memory in order", %{
+      bar_feed: bar_feed,
+      bars: bars
     } do
-      {:ok, stream} = MemoryDataFeed.stream(from: candle_feed)
-      streamed_candles = Enum.to_list(stream)
+      {:ok, stream} = MemoryDataFeed.stream(from: bar_feed)
+      streamed_bars = Enum.to_list(stream)
 
-      for {streamed_candle, original_candle} <- Enum.zip(streamed_candles, candles) do
-        assert streamed_candle == original_candle
+      for {streamed_bar, original_bar} <- Enum.zip(streamed_bars, bars) do
+        assert streamed_bar == original_bar
       end
     end
 
@@ -218,11 +218,11 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
     ]
   end
 
-  defp sample_candles() do
+  defp sample_bars() do
     base_time = ~U[2025-09-04 10:00:00.000Z]
 
     [
-      %Candle{
+      %Bar{
         time: DateTime.add(base_time, 0, :minute),
         open: 1.2340,
         high: 1.2350,
@@ -230,7 +230,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
         close: 1.2345,
         volume: 5000.0
       },
-      %Candle{
+      %Bar{
         time: DateTime.add(base_time, 1, :minute),
         open: 1.2345,
         high: 1.2355,

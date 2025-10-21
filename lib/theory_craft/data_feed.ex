@@ -2,7 +2,7 @@ defmodule TheoryCraft.DataFeed do
   @moduledoc ~S"""
   Behaviour for data sources that provide streams of market data.
 
-  A DataFeed is responsible for providing a continuous, ordered stream of `Tick` or `Candle`
+  A DataFeed is responsible for providing a continuous, ordered stream of `Tick` or `Bar`
   structs representing historical or real-time market data. Data feeds are the entry point
   for market data into TheoryCraft's processing pipeline.
 
@@ -10,7 +10,7 @@ defmodule TheoryCraft.DataFeed do
 
   - **Streaming**: Data feeds provide lazy enumerables that can handle large datasets efficiently
   - **Ordered**: Data must be ordered by time (ascending), as many processors depend on chronological order
-  - **Type-consistent**: A feed should emit either Ticks or Candles, not mixed types
+  - **Type-consistent**: A feed should emit either Ticks or Bars, not mixed types
   - **Configurable**: Feeds accept options to customize data source, filtering, etc.
 
   ## Built-in DataFeed Implementations
@@ -53,7 +53,7 @@ defmodule TheoryCraft.DataFeed do
 
       simulator = %MarketSimulator{}
       |> MarketSimulator.add_data(feed_stream, name: "eurusd_ticks")
-      |> MarketSimulator.add_processor(TickToCandleProcessor, data: "eurusd_ticks", timeframe: "m5")
+      |> MarketSimulator.add_processor(TickToBarProcessor, data: "eurusd_ticks", timeframe: "m5")
       |> MarketSimulator.stream()
 
       # Process the data
@@ -80,14 +80,14 @@ defmodule TheoryCraft.DataFeed do
 
   DataFeeds **must** provide data in ascending chronological order. This is critical because:
 
-  - Processors like `TickToCandleProcessor` assume time-ordered data for candle boundary detection
+  - Processors like `TickToBarProcessor` assume time-ordered data for bar boundary detection
   - Strategies depend on receiving events in the order they occurred historically
   - The `MarketSimulator` does not perform any sorting or time validation
 
   If your data source does not guarantee ordering, you must sort the data before yielding it.
   """
 
-  alias TheoryCraft.{Candle, Tick}
+  alias TheoryCraft.{Bar, Tick}
 
   @typedoc """
   A DataFeed specification as a tuple of module and options, or just a module.
@@ -97,21 +97,21 @@ defmodule TheoryCraft.DataFeed do
   @type spec :: {module(), Keyword.t()} | module()
 
   @typedoc """
-  A stream of market data (Ticks or Candles).
+  A stream of market data (Ticks or Bars).
 
   The stream must be:
   - Lazy (using `Stream` functions)
   - Time-ordered (ascending)
-  - Type-consistent (all Ticks or all Candles)
+  - Type-consistent (all Ticks or all Bars)
   """
-  @type stream :: Enumerable.t(Tick.t() | Candle.t())
+  @type stream :: Enumerable.t(Tick.t() | Bar.t())
 
   @doc ~S"""
   Creates a stream of market data with the given options.
 
   This callback should establish a connection to the data source (file, database, API, etc.),
   configure any necessary filters or transformations, and return a lazy enumerable stream
-  of `Tick` or `Candle` structs.
+  of `Tick` or `Bar` structs.
 
   ## Parameters
 
@@ -124,7 +124,7 @@ defmodule TheoryCraft.DataFeed do
 
   ## Returns
 
-    - `{:ok, stream}` - A stream of `Tick` or `Candle` structs ordered by time
+    - `{:ok, stream}` - A stream of `Tick` or `Bar` structs ordered by time
     - `{:error, reason}` - An error tuple if the stream cannot be created
 
   ## Examples
@@ -198,7 +198,7 @@ defmodule TheoryCraft.DataFeed do
 
   ## Returns
 
-    - A stream of `Tick` or `Candle` structs ordered by time
+    - A stream of `Tick` or `Bar` structs ordered by time
 
   ## Raises
 

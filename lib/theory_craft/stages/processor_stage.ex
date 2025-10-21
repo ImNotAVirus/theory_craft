@@ -14,9 +14,9 @@ defmodule TheoryCraft.Stages.ProcessorStage do
 
   ## Examples
 
-      # Start a ProcessorStage with TickToCandleProcessor
+      # Start a ProcessorStage with TickToBarProcessor
       {:ok, processor_stage} = ProcessorStage.start_link(
-        {TickToCandleProcessor, [data: "ticks", timeframe: "m5"]},
+        {TickToBarProcessor, [data: "ticks", timeframe: "m5"]},
         subscribe_to: [feed_stage]
       )
 
@@ -82,7 +82,7 @@ defmodule TheoryCraft.Stages.ProcessorStage do
 
       # Basic usage
       {:ok, stage} = ProcessorStage.start_link(
-        {TickToCandleProcessor, [data: "ticks", timeframe: "m5"]},
+        {TickToBarProcessor, [data: "ticks", timeframe: "m5"]},
         subscribe_to: [feed_stage]
       )
 

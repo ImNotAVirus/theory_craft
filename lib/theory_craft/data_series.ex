@@ -21,7 +21,7 @@ defmodule TheoryCraft.DataSeries do
   ## Use Cases
 
   DataSeries is ideal for:
-  - Storing historical bars/candles for technical indicators
+  - Storing historical bars/bars for technical indicators
   - Maintaining lookback windows for calculations (e.g., moving averages)
   - Time series data where recent values are accessed more frequently
 

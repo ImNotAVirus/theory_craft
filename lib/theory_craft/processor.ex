@@ -6,7 +6,7 @@ defmodule TheoryCraft.Processor do
   transforming or enriching the data as it flows through. Processors can perform various
   operations such as:
 
-  - **Data transformation**: Convert ticks to candles, apply indicators, etc.
+  - **Data transformation**: Convert ticks to bars, apply indicators, etc.
   - **Data enrichment**: Add calculated fields, merge multiple data sources
   - **Filtering**: Remove unwanted events based on criteria
   - **State tracking**: Maintain running calculations across events
@@ -42,7 +42,7 @@ defmodule TheoryCraft.Processor do
 
   ## Built-in Processors
 
-  - `TheoryCraft.Processors.TickToCandleProcessor` - Converts tick data to OHLC candles
+  - `TheoryCraft.Processors.TickToBarProcessor` - Converts tick data to OHLC bars
 
   ## Integration with MarketSimulator
 
@@ -154,11 +154,11 @@ defmodule TheoryCraft.Processor do
         # Read tick from "eurusd_ticks"
         tick = event.data["eurusd_ticks"]
 
-        # Transform to candle
-        candle = process_tick(tick, state)
+        # Transform to bar
+        bar = process_tick(tick, state)
 
-        # Write candle to "eurusd_m5" (preserves original tick)
-        updated_data = Map.put(event.data, "eurusd_m5", candle)
+        # Write bar to "eurusd_m5" (preserves original tick)
+        updated_data = Map.put(event.data, "eurusd_m5", bar)
         updated_event = %MarketEvent{event | data: updated_data}
 
         {:ok, updated_event, state}

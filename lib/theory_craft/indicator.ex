@@ -2,7 +2,7 @@ defmodule TheoryCraft.Indicator do
   @moduledoc """
   Behaviour for stateful indicators that process values to calculate technical indicators.
 
-  An Indicator is a specialized component that processes values (typically candle data)
+  An Indicator is a specialized component that processes values (typically bar data)
   to calculate technical indicators like moving averages, RSI, MACD, etc. Indicators are
   wrapped by `TheoryCraft.Processors.IndicatorProcessor` to integrate into the processing
   pipeline.
@@ -12,7 +12,7 @@ defmodule TheoryCraft.Indicator do
   While both Indicators and Processors transform data, they serve different purposes:
 
   - **Processors** (`TheoryCraft.Processor`): General-purpose data transformation components
-    that work with `MarketEvent` structs. Examples: converting ticks to candles, filtering
+    that work with `MarketEvent` structs. Examples: converting ticks to bars, filtering
     events, data enrichment.
 
   - **Indicators** (`TheoryCraft.Indicator`): Specialized for technical analysis calculations
@@ -40,18 +40,18 @@ defmodule TheoryCraft.Indicator do
         end
 
         @impl true
-        def next(candle, is_new_bar, state) do
+        def next(bar, is_new_bar, state) do
           %{period: period, values: values} = state
 
           # On a new bar, add the value to history
           new_values =
             if is_new_bar do
-              [candle.close | values] |> Enum.take(period)
+              [bar.close | values] |> Enum.take(period)
             else
               # Update the last value if it's the same bar
               case values do
-                [_last | rest] -> [candle.close | rest]
-                [] -> [candle.close]
+                [_last | rest] -> [bar.close | rest]
+                [] -> [bar.close]
               end
             end
 
@@ -79,7 +79,7 @@ defmodule TheoryCraft.Indicator do
   Indicators are used through `TheoryCraft.Processors.IndicatorProcessor`:
 
       simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(candle_stream, name: "eurusd_m5")
+      |> MarketSimulator.add_data(bar_stream, name: "eurusd_m5")
       |> MarketSimulator.add_indicator(MyIndicator.SMA, period: 20, name: "sma20")
       |> MarketSimulator.stream()
 
@@ -169,9 +169,9 @@ defmodule TheoryCraft.Indicator do
       # Simple indicator that returns the close price
       def next(event, state) do
         %{data_name: data_name, output_name: output_name} = state
-        candle = event.data[data_name]
+        bar = event.data[data_name]
 
-        updated_data = Map.put(event.data, output_name, candle.close)
+        updated_data = Map.put(event.data, output_name, bar.close)
         updated_event = %MarketEvent{event | data: updated_data}
 
         {:ok, updated_event, state}
@@ -180,10 +180,10 @@ defmodule TheoryCraft.Indicator do
       # Moving average that maintains history
       def next(event, state) do
         %{period: period, values: values, data_name: data_name, output_name: output_name} = state
-        candle = event.data[data_name]
+        bar = event.data[data_name]
 
         # Add value to history
-        new_values = [candle.close | values] |> Enum.take(period)
+        new_values = [bar.close | values] |> Enum.take(period)
 
         # Calculate average
         ma_value =
