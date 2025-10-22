@@ -3,12 +3,13 @@ defmodule TheoryCraft.DataFeeds.ExchangeDataFeed do
   Streams exchange metrics using pluggable provider callbacks.
 
   The feed supports three modes:
-    * `:historical` – emits only historical snapshots
-    * `:live` – emits only live updates
-    * `:both` – emits historical data first, then switches to live updates
+    * `:historical` - emits only historical snapshots
+    * `:live` - emits only live updates
+    * `:both` - emits historical data first, then switches to live updates
 
   A provider module must implement the callbacks defined in `Provider`. Different
-  providers can wrap APIs, databases, or websockets while reusing this feed.
+  providers can wrap APIs, databases, or websockets while reusing this feed. The project ships
+  with `TheoryCraft.DataFeeds.BinanceProvider`, which streams data from the public Binance API.
   """
 
   use TheoryCraft.DataFeed

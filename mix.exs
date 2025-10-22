@@ -38,6 +38,7 @@ defmodule TheoryCraft.MixProject do
       {:nimble_csv, "~> 1.3"},
       {:nimble_parsec, "~> 1.4"},
       {:gen_stage, "~> 1.3"},
+      {:req, "~> 0.5"},
 
       ## Dev
       {:tidewave, "~> 0.5", only: :dev},
