@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TheoryCraft is an Elixir library for backtesting trading strategies using market data. It provides a streaming-based architecture for processing ticks and bars through configurable processors and data feeds.
+TheoryCraft is an Elixir library for backtesting trading strategies using market data. It provides a GenStage-based streaming architecture for processing ticks and bars through configurable processors and data feeds.
 
 ## Common Commands
 
@@ -36,93 +36,47 @@ iex -S mix
 
 ### Core Data Flow
 
-The library uses a **streaming pipeline architecture** where market data flows through processors:
+The library uses a **GenStage pipeline architecture** where market data flows through stages:
 
-1. **Data Source** → 2. **DataFeed** → 3. **MarketEvent Stream** → 4. **Processors** → 5. **Strategy/Output**
+1. **Data Source** → 2. **DataFeedStage** (Producer) → 3. **ProcessorStage** (Producer-Consumer) → 4. **Strategy/Output** (Consumer)
+
+For parallel processing, the pipeline uses broadcast and aggregation:
+
+1. **DataFeedStage** → 2. **BroadcastStage** → 3. **N × ProcessorStage** → 4. **AggregatorStage** → 5. **Output**
 
 ### Key Concepts
 
-#### DataFeed Behaviour
-- Defines the contract for data sources (lib/theory_craft/data_feed.ex)
-- Implementations must provide `stream/1` and `stream!/1` functions
-- Returns `Enumerable.t(Tick.t() | Bar.t())`
-- Current implementations:
-  - `MemoryDataFeed`: In-memory ETS-based storage for tick/bar data
-  - `TicksCSVDataFeed`: Reads tick data from CSV files
+#### GenStage Pipeline Architecture
 
-#### MarketEvent
-- Wrapper struct that flows through the processing pipeline (lib/theory_craft/market_event.ex)
-- Contains a `data` map where keys are data stream names and values are Tick/Bar structs
-- Allows multiple data streams to be tracked simultaneously in the future
+The system uses GenStage for backpressure-aware streaming:
 
-#### Processor Behaviour
-- Transforms MarketEvents (lib/theory_craft/processor.ex)
-- Implements stateful stream processing with `init/1` and `next/2` callbacks
-- Example: `TickToBarProcessor` resamples tick data into bars at specified timeframes
+- **DataFeed Behaviour**: Contract for data sources (`stream/1`, `stream!/1`)
+- **Processor Behaviour**: Stateful transformations (`init/1`, `next/2`)
+- **MarketEvent**: Wrapper with `data` map for multi-stream tracking
+- **Stages**: GenStage wrappers around behaviours
+  - `DataFeedStage`: Producer wrapping DataFeed
+  - `ProcessorStage`: Producer-consumer wrapping Processor
+  - `BroadcastStage`: Fan-out to parallel consumers
+  - `AggregatorStage`: Synchronize and merge parallel outputs
+  - `StageHelpers`: Shared utilities (option extraction, producer/consumer tracking, Flow termination pattern)
 
 #### MarketSimulator
-- Main orchestration module (lib/theory_craft/market_simulator.ex)
-- Fluent API for building backtesting pipelines:
-  ```elixir
-  %MarketSimulator{}
-  |> add_data(stream, name: "xauusd_ticks")
-  |> resample("m5")  # Resample to 5-minute bars
-  |> stream()
-  ```
-- Currently supports one data feed at a time (will support multiple in future)
-- Uses `Stream.transform/3` to apply processors to the data flow
 
-### Data Structures
+Fluent API for building GenStage pipelines dynamically:
+- Supports multiple data feeds
+- Builds layers: single processors or parallel (Broadcast → N×Processor → Aggregator)
+- Automatic name generation for processors based on data source and timeframe
 
-#### Tick (lib/theory_craft/tick.ex)
-- Represents a single market tick
-- Fields: `time`, `ask`, `bid`, `ask_volume`, `bid_volume`
+#### GenStage Options
 
-#### Bar (lib/theory_craft/bar.ex)
-- Represents OHLC bar data
-- Fields: `time`, `open`, `high`, `low`, `close`, `volume`
+All stages support:
+- **GenStage/GenServer options**: `:name`, `:timeout`, `:debug`, `:spawn_opt`, `:hibernate_after`
+- **Subscription options** for backpressure control:
+  - `:min_demand`, `:max_demand` - Demand range
+  - `:buffer_size` - Buffer size (default: 10000)
+  - `:buffer_keep` - `:first` or `:last` when buffer is full (default: `:last`)
 
-#### TimeFrame (lib/theory_craft/time_frame.ex)
-- Parses timeframe strings like "m5" (5 minutes), "h1" (1 hour), "D" (daily)
-- Supported units: t (tick), s (second), m (minute), h (hour), D (day), W (week), M (month)
-- Format: `<unit><multiplier>` (e.g., "m15" = 15 minutes)
-
-### Important Implementation Details
-
-#### MemoryDataFeed
-- Uses ETS ordered_set for efficient time-ordered data storage
-- Supports automatic precision detection (second/millisecond/microsecond)
-- Stores data in compressed format using tuples instead of structs
-- Use `close/1` to clean up ETS tables when done
-
-#### TickToBarProcessor
-- Handles tick-to-bar resampling with configurable timeframes
-- Supports `price_type` option: `:mid`, `:bid`, or `:ask`
-- Supports `fake_volume?` option to generate volume of 1.0 per tick when volume data is missing
-- Manages `market_open` time to handle day transitions correctly for tick-based timeframes
-
-## File Organization
-
-```
-lib/theory_craft/
-├── data_feed.ex                  # DataFeed behaviour
-├── processor.ex                  # Processor behaviour
-├── market_simulator.ex           # Main orchestration
-├── market_event.ex               # Event wrapper
-├── tick.ex                       # Tick data structure
-├── bar.ex                     # Bar data structure
-├── time_frame.ex                 # TimeFrame parsing
-├── data_feeds/
-│   ├── memory_data_feed.ex      # ETS-based in-memory feed
-│   └── ticks_csv_data_feed.ex   # CSV file reader
-└── processors/
-    └── tick_to_bar_processor.ex  # Tick resampling
-```
-
-## Dependencies
-
-- `nimble_csv`: CSV parsing for data feeds
-- `nimble_parsec`: Parser combinators (future use)
+**Important**: `AggregatorStage` uses `:max_demand` internally for manual demand management, so this option cannot be passed as a subscription option for that stage.
 
 ## Coding Guidelines
 
@@ -560,7 +514,36 @@ lib/theory_craft/
 
 ### Test Organization and Readability
 
-1. **Follow consistent test module structure**
+1. **Test module-specific behavior, not standard library**
+   - DO NOT test Enum protocol implementations (map, filter, reduce, member, take, etc.)
+   - DO NOT test Access protocol extensively - just verify it works with 1-2 basic tests
+   - Focus on the module's unique business logic and edge cases
+   - Example:
+     ```elixir
+     # ❌ Bad - testing stdlib behavior
+     test "map works" do
+       series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2)
+       result = Enum.map(series, &(&1 * 2))
+       assert result == [4, 2]
+     end
+
+     test "filter works" do
+       series = DataSeries.new() |> DataSeries.add(1) |> DataSeries.add(2)
+       result = Enum.filter(series, &(&1 > 1))
+       assert result == [2]
+     end
+
+     # ✅ Good - testing module-specific logic
+     test "circular buffer overwrites oldest value when full" do
+       series = DataSeries.new(max_size: 2)
+       series = series |> DataSeries.add(1) |> DataSeries.add(2) |> DataSeries.add(3)
+       assert DataSeries.get(series, 0) == 3
+       assert DataSeries.get(series, 1) == 2
+       assert DataSeries.get(series, 2) == nil  # oldest value was dropped
+     end
+     ```
+
+2. **Follow consistent test module structure**
    - Test modules must follow a consistent structure with section comments
    - Use `## Setup` for the setup/setup_all section
    - Use `## Tests` for the test section
@@ -594,117 +577,25 @@ lib/theory_craft/
      end
      ```
 
-2. **Extract large data structures into private helper functions**
-   - Tests must be clear and readable
-   - Large lists, complex structs, or repeated test data should be extracted into private helper functions
-   - This keeps the test body focused on the actual test logic
-   - Example:
-     ```elixir
-     # ❌ Bad - large list clutters the setup
-     setup do
-       ticks = [
-         %Tick{
-           time: ~U[2024-01-01 00:00:00.000000Z],
-           ask: 2500.0,
-           bid: 2499.0,
-           ask_volume: 100.0,
-           bid_volume: 150.0
-         },
-         %Tick{
-           time: ~U[2024-01-01 00:01:00.000000Z],
-           ask: 2501.0,
-           bid: 2500.0,
-           ask_volume: 100.0,
-           bid_volume: 150.0
-         },
-         # ... 20 more ticks ...
-       ]
-
-       {:ok, ticks: ticks}
-     end
-
-     # ✅ Good - extracted to private helper function
-     setup do
-       ticks = build_test_ticks()
-       {:ok, ticks: ticks}
-     end
-
-     # Private helper functions
-
-     defp build_test_ticks do
-       [
-         %Tick{
-           time: ~U[2024-01-01 00:00:00.000000Z],
-           ask: 2500.0,
-           bid: 2499.0,
-           ask_volume: 100.0,
-           bid_volume: 150.0
-         },
-         %Tick{
-           time: ~U[2024-01-01 00:01:00.000000Z],
-           ask: 2501.0,
-           bid: 2500.0,
-           ask_volume: 100.0,
-           bid_volume: 150.0
-         },
-         # ... 20 more ticks ...
-       ]
-     end
-     ```
-
-   - This also allows reusing the same data in multiple test files
-   - For very common test data, consider creating a test support module (e.g., `test/support/fixtures.ex`)
-
-3. **Refactor repeated code into private helper functions**
-   - Tests must be clear and concise
-   - When the same code pattern is repeated multiple times in tests, extract it into a private helper function
-   - **IMPORTANT**: NEVER refactor calls to the module being tested - always keep these in the test functions themselves
-   - Only refactor calls to other modules (dependencies, setup code, etc.)
-   - This makes tests easier to read and maintain while keeping the tested functionality visible
+3. **Extract large data structures and repeated setup into helper functions**
+   - Large lists or complex structs → extract to private functions
+   - Repeated setup code → extract to private functions
+   - **CRITICAL**: NEVER refactor calls to the module being tested
+   - Only extract calls to dependency modules (setup, mocks, etc.)
    - Example:
      ```elixir
      # In ProcessorStageTest - testing ProcessorStage module
 
-     # ❌ Bad - refactoring calls to the module being tested
-     test "test 1" do
-       processor = start_processor_stage(opts)  # ❌ Don't extract ProcessorStage calls
-       # ...
+     # ❌ Bad - extracting calls to module being tested
+     test "processes events" do
+       processor = start_processor_stage(opts)  # ❌ Hides what's being tested
      end
 
-     # ✅ Good - keep calls to module being tested in the test
-     test "test 1" do
-       producer = start_producer(tick_feed)  # ✅ Helper for DataFeedStage (dependency)
+     # ✅ Good - keep tested module calls visible
+     test "processes events" do
+       producer = start_producer(feed)  # ✅ Helper for dependency
 
-       {:ok, processor} =
-         ProcessorStage.start_link(  # ✅ Direct call to module being tested
-           {TickToBarProcessor, [data: "xauusd", timeframe: "m5", name: "xauusd"]},
-           subscribe_to: [producer]
-         )
-       # ...
-     end
-
-     ## Private functions
-
-     # ✅ Good - helper for dependency module
-     defp start_producer(feed, name \\ "xauusd") do
-       {:ok, producer} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: name)
-       producer
-     end
-     ```
-
-     ```elixir
-     # In DataFeedStageTest - testing DataFeedStage module
-
-     # ❌ Bad - refactoring calls to the module being tested
-     defp start_data_feed_stage(feed) do
-       {:ok, stage} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: "xauusd")
-       stage
-     end
-
-     # ✅ Good - keep DataFeedStage calls directly in tests
-     test "test 1" do
-       {:ok, stage} = DataFeedStage.start_link({MemoryDataFeed, [from: feed]}, name: "xauusd")
-       # ...
+       {:ok, processor} = ProcessorStage.start_link(...)  # ✅ Tested module call visible
      end
      ```
 

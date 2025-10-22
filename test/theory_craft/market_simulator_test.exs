@@ -377,6 +377,123 @@ defmodule TheoryCraft.MarketSimulatorTest do
         assert %Bar{} = h1_bar
       end
     end
+
+    test "add_indicator generates name from module when not provided", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
+
+      # Should generate "simple_indicator" from module name
+      assert "simple_indicator" in simulator.data_streams
+    end
+
+    test "add_indicator with multiple same modules adds numeric suffix", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
+        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 20.0)
+        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 30.0)
+
+      # Should generate: "simple_indicator", "simple_indicator_1", "simple_indicator_2"
+      assert "simple_indicator" in simulator.data_streams
+      assert "simple_indicator_1" in simulator.data_streams
+      assert "simple_indicator_2" in simulator.data_streams
+    end
+
+    test "add_indicator raises when explicit name is already taken", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+
+      assert_raise ArgumentError, ~r/Data stream name "xauusd_m5" is already taken/, fn ->
+        MarketSimulator.add_indicator(simulator, SimpleIndicator,
+          data: "xauusd_m5",
+          name: "xauusd_m5",
+          constant: 10.0
+        )
+      end
+    end
+
+    test "add_indicators_layer generates names from modules when not provided", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+        |> MarketSimulator.add_indicators_layer([
+          {SimpleIndicator, data: "xauusd_m5", constant: 10.0},
+          {SMAIndicator, input: "xauusd_m5", period: 3}
+        ])
+
+      # Should generate "simple_indicator" and "sma_indicator"
+      assert "simple_indicator" in simulator.data_streams
+      assert "sma_indicator" in simulator.data_streams
+    end
+
+    test "add_indicators_layer handles multiple same modules in single layer", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+        |> MarketSimulator.add_indicators_layer([
+          {SimpleIndicator, data: "xauusd_m5", constant: 10.0},
+          {SimpleIndicator, data: "xauusd_m5", constant: 20.0},
+          {SimpleIndicator, data: "xauusd_m5", constant: 30.0}
+        ])
+
+      # Should generate: "simple_indicator", "simple_indicator_1", "simple_indicator_2"
+      assert "simple_indicator" in simulator.data_streams
+      assert "simple_indicator_1" in simulator.data_streams
+      assert "simple_indicator_2" in simulator.data_streams
+    end
+
+    test "add_indicators_layer raises when explicit name is already taken", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+
+      assert_raise ArgumentError, ~r/Data stream name "xauusd_m5" is already taken/, fn ->
+        MarketSimulator.add_indicators_layer(simulator, [
+          {SimpleIndicator, data: "xauusd_m5", name: "xauusd_m5", constant: 10.0}
+        ])
+      end
+    end
+
+    test "add_indicators_layer raises when duplicate name in same layer", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+
+      assert_raise ArgumentError, ~r/Data stream name "duplicate" is already taken/, fn ->
+        MarketSimulator.add_indicators_layer(simulator, [
+          {SimpleIndicator, data: "xauusd_m5", name: "duplicate", constant: 10.0},
+          {SMAIndicator, input: "xauusd_m5", name: "duplicate", period: 3}
+        ])
+      end
+    end
+
+    test "mixed explicit and generated names in add_indicators_layer", %{feed: feed} do
+      simulator =
+        %MarketSimulator{}
+        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+        |> MarketSimulator.add_indicators_layer([
+          {SimpleIndicator, data: "xauusd_m5", name: "explicit_name", constant: 10.0},
+          {SimpleIndicator, data: "xauusd_m5", constant: 20.0},
+          {SMAIndicator, input: "xauusd_m5", period: 3}
+        ])
+
+      # Should have "explicit_name", "simple_indicator" (auto), "sma_indicator" (auto)
+      assert "explicit_name" in simulator.data_streams
+      assert "simple_indicator" in simulator.data_streams
+      assert "sma_indicator" in simulator.data_streams
+    end
   end
 
   ## Private helper functions

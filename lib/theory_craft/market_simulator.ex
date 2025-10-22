@@ -350,6 +350,9 @@ defmodule TheoryCraft.MarketSimulator do
   ## Default Names
 
   - If `:data` is not provided in processor opts, uses the name of the single data feed
+  - If `:name` is not provided, generates it from the module name in snake_case
+    (e.g., `TheoryCraft.Indicators.SMA` → `"sma"`)
+  - If the generated name already exists, adds a numeric suffix (`"sma_1"`, `"sma_2"`, etc.)
 
   ## Parameters
 
@@ -359,7 +362,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Examples
 
-      # With explicit data
+      # With explicit data and names
       simulator
       |> add_indicators_layer([
         {TheoryCraft.Indicators.Volume, name: "volume", data: "XAUUSD_m5"},
@@ -383,12 +386,12 @@ defmodule TheoryCraft.MarketSimulator do
       raise ArgumentError, "indicator_specs cannot be empty"
     end
 
-    # Add default :data to each indicator spec if not provided
-    # and wrap in IndicatorProcessor
-    enhanced_specs =
-      Enum.map(indicator_specs, fn indicator_spec ->
+    # Process each indicator spec: add defaults, generate names, validate
+    {enhanced_specs, new_data_names} =
+      Enum.map_reduce(indicator_specs, [], fn indicator_spec, generated_names ->
         {module, indicator_opts} = Utils.normalize_spec(indicator_spec)
 
+        # Deduce :data if not provided
         data_name =
           Keyword.get_lazy(indicator_opts, :data, fn ->
             fetch_default_data_name(simulator)
@@ -399,18 +402,32 @@ defmodule TheoryCraft.MarketSimulator do
           raise ArgumentError, "Data stream #{inspect(data_name)} not found"
         end
 
-        # Add :data to opts if not present
-        enhanced_opts = Keyword.put_new(indicator_opts, :data, data_name)
+        # Generate :name if not provided
+        output_name =
+          Keyword.get_lazy(indicator_opts, :name, fn ->
+            generate_indicator_name(module, data_streams, generated_names)
+          end)
+
+        # Validate that the name is not already taken
+        all_taken_names = data_streams ++ generated_names
+
+        if output_name in all_taken_names do
+          raise ArgumentError,
+                "Data stream name #{inspect(output_name)} is already taken. " <>
+                  "Please provide a unique :name option."
+        end
+
+        # Add :data and :name to opts
+        enhanced_opts =
+          indicator_opts
+          |> Keyword.put_new(:data, data_name)
+          |> Keyword.put_new(:name, output_name)
 
         # Wrap indicator in IndicatorProcessor
-        {IndicatorProcessor, Keyword.put(enhanced_opts, :module, module)}
-      end)
+        processor_spec = {IndicatorProcessor, Keyword.put(enhanced_opts, :module, module)}
 
-    # Extract all output names
-    new_data_names =
-      for {_module, indicator_opts} <- enhanced_specs do
-        Keyword.fetch!(indicator_opts, :name)
-      end
+        {processor_spec, generated_names ++ [output_name]}
+      end)
 
     # Add new layer with multiple processors and track new data streams
     %MarketSimulator{
@@ -429,6 +446,9 @@ defmodule TheoryCraft.MarketSimulator do
   ## Default Names
 
   - If `:data` is not provided, uses the name of the single data feed
+  - If `:name` is not provided, generates it from the module name in snake_case
+    (e.g., `TheoryCraft.Indicators.SMA` → `"sma"`)
+  - If the generated name already exists, adds a numeric suffix (`"sma_1"`, `"sma_2"`, etc.)
 
   ## Parameters
 
@@ -438,13 +458,23 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Examples
 
-      # With explicit data
+      # With explicit data and name
       simulator
       |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14", data: "volume")
 
       # With default data (if single data feed)
       simulator
       |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14")
+
+      # With default name (generates "sma")
+      simulator
+      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14)
+
+      # Multiple indicators with same module (generates "sma", "sma_1", "sma_2")
+      simulator
+      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14)
+      |> add_indicator(TheoryCraft.Indicators.SMA, period: 20)
+      |> add_indicator(TheoryCraft.Indicators.SMA, period: 50)
 
   """
   @spec add_indicator(t(), module(), Keyword.t()) :: t()
@@ -462,10 +492,24 @@ defmodule TheoryCraft.MarketSimulator do
       raise ArgumentError, "Data stream #{inspect(data_name)} not found"
     end
 
-    output_name = Keyword.fetch!(opts, :name)
+    # Generate :name if not provided
+    output_name =
+      Keyword.get_lazy(opts, :name, fn ->
+        generate_indicator_name(processor_module, data_streams)
+      end)
+
+    # Validate that the name is not already taken
+    if output_name in data_streams do
+      raise ArgumentError,
+            "Data stream name #{inspect(output_name)} is already taken. " <>
+              "Please provide a unique :name option."
+    end
 
     # Add :data to opts if not present
-    enhanced_opts = Keyword.put_new(opts, :data, data_name)
+    enhanced_opts =
+      opts
+      |> Keyword.put_new(:data, data_name)
+      |> Keyword.put_new(:name, output_name)
 
     # Wrap indicator in IndicatorProcessor
     processor_spec = {IndicatorProcessor, Keyword.put(enhanced_opts, :module, processor_module)}
@@ -620,6 +664,41 @@ defmodule TheoryCraft.MarketSimulator do
   end
 
   ## Private functions
+
+  # Generates a unique indicator name based on the module
+  # Returns a name in snake_case format, with a numeric suffix if there are collisions
+  defp generate_indicator_name(module, existing_names, already_generated \\ []) do
+    # Extract module name and convert to snake_case
+    base_name =
+      module
+      |> Module.split()
+      |> List.last()
+      |> Macro.underscore()
+
+    all_taken_names = existing_names ++ already_generated
+
+    # Find a unique name by adding suffix if needed
+    find_unique_name(base_name, all_taken_names, 0)
+  end
+
+  # Recursively finds a unique name by adding numeric suffixes
+  defp find_unique_name(base_name, taken_names, 0) do
+    if base_name in taken_names do
+      find_unique_name(base_name, taken_names, 1)
+    else
+      base_name
+    end
+  end
+
+  defp find_unique_name(base_name, taken_names, suffix) do
+    candidate = "#{base_name}_#{suffix}"
+
+    if candidate in taken_names do
+      find_unique_name(base_name, taken_names, suffix + 1)
+    else
+      candidate
+    end
+  end
 
   # Fetches the default data name from data feeds
   # Returns the name of the single data feed, or raises if none or multiple

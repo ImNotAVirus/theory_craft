@@ -5,6 +5,7 @@ Mix.install(
   [
     {:tzdata, "~> 1.1"},
     {:theory_craft, path: "D:/Documents/Dev/Elixir/theorycraft", override: true},
+    {:theory_craft_ta, path: "D:/Documents/Dev/Elixir/theory_craft_ta", override: true},
     {:kino_theory_craft,
      path: "D:/Documents/Dev/Elixir/theorycraft/.deps/kino_theory_craft"}
   ],
@@ -151,7 +152,7 @@ input_file =
   |> KinoTheoryCraft.Input.stream(name: Path.basename(filename))
 ```
 
-<!-- livebook:{"attrs":"eyJpbnB1dF92YXJpYWJsZSI6ImlucHV0X2ZpbGUiLCJ0YXNrX2lkIjoicmVzYW1wbGUiLCJ0aW1lZnJhbWVfbXVsdGlwbGllciI6NSwidGltZWZyYW1lX3VuaXQiOiJtIiwidGltZXpvbmUiOiJFdXJvcGUvUGFyaXMifQ","chunks":[[0,2514]],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJpbnB1dF92YXJpYWJsZSI6ImlucHV0X2ZpbGUiLCJ0YXNrX2lkIjoicmVzYW1wbGUiLCJ0aW1lZnJhbWVfbXVsdGlwbGllciI6NSwidGltZWZyYW1lX3VuaXQiOiJtIiwidGltZXpvbmUiOiJFdXJvcGUvUGFyaXMifQ","chunks":[[0,2508]],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 alias KinoTheoryCraft.Control.{Chart, ChartController, Streamer}
@@ -245,11 +246,16 @@ Kino.Layout.grid([chart, bottom_row], boxed: true, gap: 12)
 ```
 
 ```elixir
+alias TheoryCraftTA.Overlap, as: Overlap
+alias TheoryCraft.MarketSimulator
+
 %MarketSimulator{}
 |> MarketSimulator.add_data(input.stream, name: "data")
 |> MarketSimulator.resample(timeframe, name: "data_#{timeframe}")
+|> MarketSimulator.add_indicators_layer([
+  Overlap.SMA.indicator_spec(2, name: "sma_2", data: "data_#{timeframe}", source: :close),
+  Overlap.EMA.indicator_spec(3, name: "ema_3", data: "data_#{timeframe}", source: :close),
+])
 |> MarketSimulator.stream()
-
-input.stream
 |> Enum.take(3)
 ```
