@@ -87,7 +87,6 @@ defmodule TheoryCraft.Stages.BroadcastStageTest do
 
       # Events should be identical
       assert events1 == events2
-
     end
 
     test "passes through events unchanged", %{broadcast: broadcast, producer: producer} do
@@ -112,7 +111,6 @@ defmodule TheoryCraft.Stages.BroadcastStageTest do
         assert %MarketEvent{} = event
         assert event.data["xauusd"] == expected_tick
       end
-
     end
 
     test "handles backpressure correctly", %{broadcast: broadcast, producer: producer} do
@@ -131,7 +129,6 @@ defmodule TheoryCraft.Stages.BroadcastStageTest do
       # Should receive events in small batches
       assert_receive {:events, events}, 100
       assert length(events) <= 2
-
     end
 
     test "broadcasts to three consumers simultaneously", %{
@@ -200,7 +197,6 @@ defmodule TheoryCraft.Stages.BroadcastStageTest do
       all_events = collect_all_events_with_done()
 
       assert length(all_events) == length(sample_ticks())
-
     end
   end
 
@@ -271,5 +267,4 @@ defmodule TheoryCraft.Stages.BroadcastStageTest do
       500 -> acc
     end
   end
-
 end

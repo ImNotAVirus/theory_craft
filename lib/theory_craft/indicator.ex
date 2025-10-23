@@ -32,26 +32,33 @@ defmodule TheoryCraft.Indicator do
       defmodule MyIndicator.SMA do
         @behaviour TheoryCraft.Indicator
 
+        alias TheoryCraft.{IndicatorValue, MarketEvent}
+
         @impl true
         def init(opts) do
           period = Keyword.get(opts, :period, 20)
-          state = %{period: period, values: []}
+          data_name = Keyword.fetch!(opts, :data)
+          state = %{period: period, values: [], data_name: data_name}
           {:ok, state}
         end
 
         @impl true
-        def next(bar, is_new_bar, state) do
-          %{period: period, values: values} = state
+        def next(event, state) do
+          %{period: period, values: values, data_name: data_name} = state
+
+          # Extract value and new_bar? flag using MarketEvent helpers
+          value = MarketEvent.extract_value(event, data_name, :close)
+          new_bar? = MarketEvent.new_bar?(event, data_name)
 
           # On a new bar, add the value to history
           new_values =
-            if is_new_bar do
-              [bar.close | values] |> Enum.take(period)
+            if new_bar? do
+              [value | values] |> Enum.take(period)
             else
               # Update the last value if it's the same bar
               case values do
-                [_last | rest] -> [bar.close | rest]
-                [] -> [bar.close]
+                [_last | rest] -> [value | rest]
+                [] -> [value]
               end
             end
 
@@ -65,7 +72,13 @@ defmodule TheoryCraft.Indicator do
 
           new_state = %{state | values: new_values}
 
-          {:ok, sma_value, new_state}
+          # Wrap in IndicatorValue
+          indicator_value = %IndicatorValue{
+            value: sma_value,
+            data_name: data_name
+          }
+
+          {:ok, indicator_value, new_state}
         end
       end
 
@@ -80,13 +93,21 @@ defmodule TheoryCraft.Indicator do
 
       simulator = %MarketSimulator{}
       |> MarketSimulator.add_data(bar_stream, name: "eurusd_m5")
-      |> MarketSimulator.add_indicator(MyIndicator.SMA, period: 20, name: "sma20")
+      |> MarketSimulator.add_indicator(
+        MyIndicator.SMA,
+        data: "eurusd_m5",
+        name: "sma20",
+        period: 20
+      )
       |> MarketSimulator.stream()
+
+  The `data` option specifies which data stream to use and is passed to the indicator's `init/1`.
+  The `name` option specifies the output key in the event and is handled by IndicatorProcessor.
 
   See `TheoryCraft.MarketSimulator` for more details on building processing pipelines.
   """
 
-  alias TheoryCraft.MarketEvent
+  alias TheoryCraft.{IndicatorValue, MarketEvent}
 
   @typedoc """
   An Indicator specification as a tuple of module and options, or just a module.
@@ -94,6 +115,8 @@ defmodule TheoryCraft.Indicator do
   When only the module is provided, options is an empty list.
   """
   @type spec :: {module(), Keyword.t()} | module()
+
+  ## Callbacks
 
   @doc """
   Initializes the indicator with the given options.
@@ -147,11 +170,21 @@ defmodule TheoryCraft.Indicator do
   @callback init(opts :: Keyword.t()) :: {:ok, state :: any()}
 
   @doc """
-  Processes a market event and returns the updated event with indicator value.
+  Processes a market event and returns the calculated indicator value wrapped in an IndicatorValue.
 
-  This callback is invoked for each market event in the stream. It receives the current event
-  and the indicator's state, and must return the updated event with the indicator value added
-  along with the new state.
+  This callback is invoked for each market event in the stream. It receives the full event
+  and the indicator's state, and must return an `IndicatorValue` struct containing the
+  calculated value and a reference to the source data name.
+
+  The indicator is responsible for:
+  - Extracting all data it needs from the event (values, temporal flags, etc.)
+  - Calculating the indicator value
+  - Wrapping the result in an `IndicatorValue` with the appropriate `data_name`
+
+  This allows indicators to:
+  - Access multiple values (e.g., high/low/close for Bollinger Bands)
+  - Handle bar boundaries as they see fit
+  - Specify which data stream they're based on for lazy temporal context lookup
 
   ## Parameters
 
@@ -160,30 +193,45 @@ defmodule TheoryCraft.Indicator do
 
   ## Returns
 
-    - `{:ok, updated_event, new_state}` - A tuple containing:
-      - `updated_event` - The `MarketEvent` with the indicator value added
+    - `{:ok, indicator_value, new_state}` - A tuple containing:
+      - `indicator_value` - An `IndicatorValue` struct with the calculated value and data_name reference
       - `new_state` - The updated indicator state for the next event
 
   ## Examples
 
-      # Simple indicator that returns the close price
+      # Simple indicator that extracts close price
       def next(event, state) do
-        %{data_name: data_name, output_name: output_name} = state
-        bar = event.data[data_name]
+        %{data_name: data_name} = state
 
-        updated_data = Map.put(event.data, output_name, bar.close)
-        updated_event = %MarketEvent{event | data: updated_data}
+        value = MarketEvent.extract_value(event, data_name, :close)
 
-        {:ok, updated_event, state}
+        indicator_value = %IndicatorValue{
+          value: value,
+          data_name: data_name
+        }
+
+        {:ok, indicator_value, state}
       end
 
-      # Moving average that maintains history
+      # Moving average on close price
       def next(event, state) do
-        %{period: period, values: values, data_name: data_name, output_name: output_name} = state
-        bar = event.data[data_name]
+        %{period: period, values: values, data_name: data_name} = state
 
-        # Add value to history
-        new_values = [bar.close | values] |> Enum.take(period)
+        # Extract value and new_bar? flag using MarketEvent helpers
+        value = MarketEvent.extract_value(event, data_name, :close)
+        new_bar? = MarketEvent.new_bar?(event, data_name)
+
+        # On a new bar, add the value to history
+        new_values =
+          if new_bar? do
+            [value | values] |> Enum.take(period)
+          else
+            # Update the last value if it's the same bar
+            case values do
+              [_last | rest] -> [value | rest]
+              [] -> [value]
+            end
+          end
 
         # Calculate average
         ma_value =
@@ -195,13 +243,16 @@ defmodule TheoryCraft.Indicator do
 
         new_state = %{state | values: new_values}
 
-        updated_data = Map.put(event.data, output_name, ma_value)
-        updated_event = %MarketEvent{event | data: updated_data}
+        # Wrap in IndicatorValue
+        indicator_value = %IndicatorValue{
+          value: ma_value,
+          data_name: data_name
+        }
 
-        {:ok, updated_event, new_state}
+        {:ok, indicator_value, new_state}
       end
 
   """
   @callback next(event :: MarketEvent.t(), state :: any()) ::
-              {:ok, updated_event :: MarketEvent.t(), new_state :: any()}
+              {:ok, indicator_value :: IndicatorValue.t(), new_state :: any()}
 end

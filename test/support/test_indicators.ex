@@ -2,7 +2,7 @@ defmodule TheoryCraft.TestIndicators do
   @moduledoc false
   # Test indicator modules for testing IndicatorProcessor behavior
 
-  alias TheoryCraft.MarketEvent
+  alias TheoryCraft.IndicatorValue
 
   defmodule SimpleIndicator do
     @moduledoc false
@@ -10,26 +10,25 @@ defmodule TheoryCraft.TestIndicators do
 
     @behaviour TheoryCraft.Indicator
 
-    alias TheoryCraft.MarketEvent
+    alias TheoryCraft.IndicatorValue
 
     @impl true
     def init(opts) do
       constant = Keyword.get(opts, :constant, 10.0)
       data_name = Keyword.fetch!(opts, :data)
-      output_name = Keyword.fetch!(opts, :name)
-
-      {:ok, %{constant: constant, data_name: data_name, output_name: output_name}}
+      {:ok, %{constant: constant, data_name: data_name}}
     end
 
     @impl true
-    def next(event, state) do
-      %{constant: constant, output_name: output_name} = state
+    def next(_event, state) do
+      %{constant: constant, data_name: data_name} = state
 
-      # Simply write the constant value to the event
-      updated_data = Map.put(event.data, output_name, constant)
-      updated_event = %MarketEvent{event | data: updated_data}
+      indicator_value = %IndicatorValue{
+        value: constant,
+        data_name: data_name
+      }
 
-      {:ok, updated_event, state}
+      {:ok, indicator_value, state}
     end
   end
 
@@ -39,20 +38,19 @@ defmodule TheoryCraft.TestIndicators do
 
     @behaviour TheoryCraft.Indicator
 
-    alias TheoryCraft.MarketEvent
+    alias TheoryCraft.IndicatorValue
 
     @impl true
     def init(opts) do
       period = Keyword.get(opts, :period, 5)
       data_name = Keyword.fetch!(opts, :data)
-      output_name = Keyword.fetch!(opts, :name)
 
-      {:ok, %{period: period, values: [], data_name: data_name, output_name: output_name}}
+      {:ok, %{period: period, values: [], data_name: data_name}}
     end
 
     @impl true
     def next(event, state) do
-      %{period: period, values: values, data_name: data_name, output_name: output_name} = state
+      %{period: period, values: values, data_name: data_name} = state
 
       # Extract value from event
       value = event.data[data_name]
@@ -79,11 +77,13 @@ defmodule TheoryCraft.TestIndicators do
 
       new_state = %{state | values: new_values}
 
-      # Write SMA value to event
-      updated_data = Map.put(event.data, output_name, sma)
-      updated_event = %MarketEvent{event | data: updated_data}
+      # Wrap in IndicatorValue
+      indicator_value = %IndicatorValue{
+        value: sma,
+        data_name: data_name
+      }
 
-      {:ok, updated_event, new_state}
+      {:ok, indicator_value, new_state}
     end
   end
 

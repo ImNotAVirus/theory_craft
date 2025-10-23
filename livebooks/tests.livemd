@@ -246,16 +246,18 @@ Kino.Layout.grid([chart, bottom_row], boxed: true, gap: 12)
 ```
 
 ```elixir
-alias TheoryCraftTA.Overlap, as: Overlap
+require TheoryCraftTA.TA, as: TA
+
 alias TheoryCraft.MarketSimulator
 
 %MarketSimulator{}
-|> MarketSimulator.add_data(input.stream, name: "data")
-|> MarketSimulator.resample(timeframe, name: "data_#{timeframe}")
+|> MarketSimulator.add_data(input_file.stream, name: "data")
+|> MarketSimulator.resample(timeframe, name: "data_m5")
 |> MarketSimulator.add_indicators_layer([
-  Overlap.SMA.indicator_spec(2, name: "sma_2", data: "data_#{timeframe}", source: :close),
-  Overlap.EMA.indicator_spec(3, name: "ema_3", data: "data_#{timeframe}", source: :close),
+  TA.sma(data_m5[:close], 2),
+  TA.ema(data_m5[:close], 3),
 ])
 |> MarketSimulator.stream()
-|> Enum.take(3)
+|> Enum.at(3300)
+# |> Enum.slice(3300..3302)
 ```

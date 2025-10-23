@@ -169,7 +169,14 @@ defmodule TheoryCraft.Stages.DataFeedStage do
     # Wrap each event in a MarketEvent struct
     wrapped_stream =
       Stream.map(enumerable, fn event ->
-        %TheoryCraft.MarketEvent{data: %{name => event}}
+        # Should be a Tick or Bar here
+        %{time: time} = event
+
+        %TheoryCraft.MarketEvent{
+          time: time,
+          source: name,
+          data: %{name => event}
+        }
       end)
 
     GenStage.from_enumerable(

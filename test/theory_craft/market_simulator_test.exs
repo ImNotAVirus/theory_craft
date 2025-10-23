@@ -6,6 +6,7 @@ defmodule TheoryCraft.MarketSimulatorTest do
   alias TheoryCraft.Tick
   alias TheoryCraft.Bar
   alias TheoryCraft.DataFeeds.MemoryDataFeed
+  alias TheoryCraft.IndicatorValue
   alias TheoryCraft.TestIndicators.SimpleIndicator
   alias TheoryCraft.TestIndicators.SMAIndicator
 
@@ -103,8 +104,8 @@ defmodule TheoryCraft.MarketSimulatorTest do
         assert %MarketEvent{data: %{"indicator2" => ind2_value}} = event
         assert %Tick{} = tick
         assert %Bar{} = m5_bar
-        assert ind1_value == 10.0
-        assert ind2_value == 20.0
+        assert %IndicatorValue{value: 10.0} = ind1_value
+        assert %IndicatorValue{value: 20.0} = ind2_value
       end
     end
 
@@ -132,8 +133,9 @@ defmodule TheoryCraft.MarketSimulatorTest do
         assert %MarketEvent{data: %{"final" => final_bar}} = event
         assert %Tick{} = tick
         assert %Bar{} = m1_bar
-        assert ind1_value == 5.0
-        assert is_number(ind2_value)
+        assert %IndicatorValue{value: 5.0} = ind1_value
+        assert %IndicatorValue{value: value} = ind2_value
+        assert is_number(value)
         assert %Bar{} = final_bar
       end
     end
@@ -170,7 +172,7 @@ defmodule TheoryCraft.MarketSimulatorTest do
         assert %MarketEvent{data: %{"indicator" => indicator_value}} = event
         assert %Tick{} = tick
         assert %Bar{} = m5_bar
-        assert indicator_value == 15.0
+        assert %IndicatorValue{value: 15.0} = indicator_value
       end
     end
 

@@ -63,11 +63,12 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   The processor state containing the indicator module and its state.
   """
   @type t :: %__MODULE__{
-          indicator_module: module(),
-          indicator_state: any()
+          module: module(),
+          state: any(),
+          name: String.t()
         }
 
-  defstruct [:indicator_module, :indicator_state]
+  defstruct [:module, :state, :name]
 
   ## Processor behaviour
 
@@ -111,6 +112,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   @spec init(Keyword.t()) :: {:ok, t()}
   def init(opts) do
     indicator_module = Utils.required_opt!(opts, :module)
+    name = Utils.required_opt!(opts, :name)
 
     # Forward all options (except :module) to the indicator
     indicator_opts = Keyword.delete(opts, :module)
@@ -118,8 +120,9 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
     case indicator_module.init(indicator_opts) do
       {:ok, indicator_state} ->
         state = %IndicatorProcessor{
-          indicator_module: indicator_module,
-          indicator_state: indicator_state
+          module: indicator_module,
+          state: indicator_state,
+          name: name
         }
 
         {:ok, state}
@@ -183,15 +186,22 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   """
   @impl true
   @spec next(MarketEvent.t(), t()) :: {:ok, MarketEvent.t(), t()}
-  def next(event, %IndicatorProcessor{} = state) do
+  def next(event, %IndicatorProcessor{} = processor_state) do
+    %MarketEvent{data: event_data} = event
+
     %IndicatorProcessor{
-      indicator_module: indicator_module,
-      indicator_state: indicator_state
-    } = state
+      module: indicator_module,
+      state: indicator_state,
+      name: name
+    } = processor_state
 
     case indicator_module.next(event, indicator_state) do
-      {:ok, updated_event, new_indicator_state} ->
-        new_state = %IndicatorProcessor{state | indicator_state: new_indicator_state}
+      {:ok, indicator_value, new_indicator_state} ->
+        # Add the indicator value to the event data under the configured output name
+        new_data = Map.put(event_data, name, indicator_value)
+        updated_event = %MarketEvent{event | data: new_data}
+        new_state = %IndicatorProcessor{processor_state | state: new_indicator_state}
+
         {:ok, updated_event, new_state}
 
       error ->

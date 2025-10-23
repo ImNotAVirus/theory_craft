@@ -8,27 +8,35 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
 
   # Mock indicator that sends messages to test process to verify calls
   defmodule MockIndicator do
+    alias TheoryCraft.IndicatorValue
+
     @behaviour TheoryCraft.Indicator
 
     @impl true
     def init(opts) do
       test_pid = Keyword.fetch!(opts, :test_pid)
+      data_name = Keyword.fetch!(opts, :data)
       send(test_pid, {:init_called, opts})
 
-      state = %{test_pid: test_pid, call_count: 0}
+      state = %{test_pid: test_pid, call_count: 0, data_name: data_name}
       {:ok, state}
     end
 
     @impl true
     def next(event, state) do
-      %{test_pid: test_pid, call_count: call_count} = state
+      %{test_pid: test_pid, call_count: call_count, data_name: data_name} = state
+
       send(test_pid, {:next_called, event, state})
 
-      # Add a simple output to the event
-      updated_event = put_in(event.data["mock_output"], call_count)
+      # Return the call count as the indicator value wrapped in IndicatorValue
       new_state = %{state | call_count: call_count + 1}
 
-      {:ok, updated_event, new_state}
+      indicator_value = %IndicatorValue{
+        value: call_count,
+        data_name: data_name
+      }
+
+      {:ok, indicator_value, new_state}
     end
   end
 
@@ -66,7 +74,7 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
 
       assert {:ok, state} = IndicatorProcessor.init(opts)
 
-      # Verify init was called with options (minus :module)
+      # Verify init was called with options (minus :module only)
       assert_received {:init_called, received_opts}
       assert Keyword.get(received_opts, :test_pid) == self()
       assert Keyword.get(received_opts, :data) == "test_data"
@@ -75,9 +83,9 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
 
       # Verify processor state structure
       assert %IndicatorProcessor{} = state
-      assert state.indicator_module == MockIndicator
-      assert state.indicator_state.test_pid == self()
-      assert state.indicator_state.call_count == 0
+      assert state.module == MockIndicator
+      assert state.state.test_pid == self()
+      assert state.state.call_count == 0
     end
 
     test "raises error when module option is missing" do
@@ -97,7 +105,13 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
 
   describe "next/2" do
     test "calls indicator module next with event and state" do
-      {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
+      {:ok, state} =
+        IndicatorProcessor.init(
+          module: MockIndicator,
+          test_pid: self(),
+          data: "bar",
+          name: "mock_output"
+        )
 
       bar = build_bar(~U[2024-01-01 10:00:00Z])
       event = %MarketEvent{data: %{"bar" => bar}}
@@ -110,37 +124,49 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
       assert received_state.test_pid == self()
       assert received_state.call_count == 0
 
-      # Verify the updated event contains indicator output
-      assert updated_event.data["mock_output"] == 0
+      # Verify the updated event contains indicator output wrapped in IndicatorValue
+      assert %TheoryCraft.IndicatorValue{value: 0, data_name: "bar"} =
+               updated_event.data["mock_output"]
 
       # Verify processor state was updated
-      assert new_state.indicator_state.call_count == 1
+      assert new_state.state.call_count == 1
     end
 
     test "maintains indicator state across multiple calls" do
-      {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
+      {:ok, state} =
+        IndicatorProcessor.init(
+          module: MockIndicator,
+          test_pid: self(),
+          data: "bar",
+          name: "mock_output"
+        )
 
       bar = build_bar(~U[2024-01-01 10:00:00Z])
       event = %MarketEvent{data: %{"bar" => bar}}
 
       # First call
       {:ok, event1, state1} = IndicatorProcessor.next(event, state)
-      assert event1.data["mock_output"] == 0
-      assert state1.indicator_state.call_count == 1
+      assert %TheoryCraft.IndicatorValue{value: 0} = event1.data["mock_output"]
+      assert state1.state.call_count == 1
 
       # Second call
       {:ok, event2, state2} = IndicatorProcessor.next(event, state1)
-      assert event2.data["mock_output"] == 1
-      assert state2.indicator_state.call_count == 2
+      assert %TheoryCraft.IndicatorValue{value: 1} = event2.data["mock_output"]
+      assert state2.state.call_count == 2
 
       # Third call
       {:ok, event3, state3} = IndicatorProcessor.next(event, state2)
-      assert event3.data["mock_output"] == 2
-      assert state3.indicator_state.call_count == 3
+      assert %TheoryCraft.IndicatorValue{value: 2} = event3.data["mock_output"]
+      assert state3.state.call_count == 3
     end
 
     test "propagates indicator next errors" do
-      {:ok, state} = IndicatorProcessor.init(module: FailingNextIndicator)
+      {:ok, state} =
+        IndicatorProcessor.init(
+          module: FailingNextIndicator,
+          data: "bar",
+          name: "fail"
+        )
 
       bar = build_bar(~U[2024-01-01 10:00:00Z])
       event = %MarketEvent{data: %{"bar" => bar}}
@@ -149,7 +175,13 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
     end
 
     test "returns updated event from indicator" do
-      {:ok, state} = IndicatorProcessor.init(module: MockIndicator, test_pid: self())
+      {:ok, state} =
+        IndicatorProcessor.init(
+          module: MockIndicator,
+          test_pid: self(),
+          data: "bar",
+          name: "mock_output"
+        )
 
       bar = build_bar(~U[2024-01-01 10:00:00Z])
       event = %MarketEvent{data: %{"bar" => bar, "other" => 123}}
@@ -159,8 +191,9 @@ defmodule TheoryCraft.Processors.IndicatorProcessorTest do
       # Original data should be preserved
       assert updated_event.data["bar"] == bar
       assert updated_event.data["other"] == 123
-      # New data added by indicator
-      assert updated_event.data["mock_output"] == 0
+      # New data added by indicator (wrapped in IndicatorValue)
+      assert %TheoryCraft.IndicatorValue{value: 0, data_name: "bar"} =
+               updated_event.data["mock_output"]
     end
   end
 
