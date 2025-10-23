@@ -250,9 +250,11 @@ require TheoryCraftTA.TA, as: TA
 
 alias TheoryCraft.MarketSimulator
 
+Logger.configure(level: :info)
+
 %MarketSimulator{}
 |> MarketSimulator.add_data(input_file.stream, name: "data")
-|> MarketSimulator.resample(timeframe, name: "data_m5")
+|> MarketSimulator.resample("m5", name: "data_m5")
 |> MarketSimulator.add_indicators_layer([
   TA.sma(data_m5[:close], 2),
   TA.ema(data_m5[:close], 3),

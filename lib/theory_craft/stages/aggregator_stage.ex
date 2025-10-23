@@ -246,13 +246,16 @@ defmodule TheoryCraft.Stages.AggregatorStage do
       |> Enum.map(fn events_tuple ->
         events = Tuple.to_list(events_tuple)
 
+        # Take time and source from the first event
+        [first_event | _rest] = events
+
         # Merge all data maps from parallel events
         merged_data =
           Enum.reduce(events, %{}, fn event, acc ->
             Map.merge(acc, event.data)
           end)
 
-        %TheoryCraft.MarketEvent{data: merged_data}
+        %TheoryCraft.MarketEvent{first_event | data: merged_data}
       end)
 
     # Update buffers with remaining events

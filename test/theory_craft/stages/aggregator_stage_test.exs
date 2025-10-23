@@ -204,5 +204,52 @@ defmodule TheoryCraft.Stages.AggregatorStageTest do
       Process.sleep(100)
       assert Process.alive?(aggregator)
     end
+
+    test "preserves time and source from first event when merging" do
+      {:ok, aggregator} =
+        AggregatorStage.start_link(
+          producer_count: 2,
+          max_demand: 10
+        )
+
+      {:ok, p1} = GenStage.start_link(ManualProducer, %{events: []})
+      {:ok, p2} = GenStage.start_link(ManualProducer, %{events: []})
+
+      GenStage.sync_subscribe(aggregator, to: p1, cancel: :transient, index: 0)
+      GenStage.sync_subscribe(aggregator, to: p2, cancel: :transient, index: 1)
+
+      {:ok, consumer} = GenStage.start_link(TestEventConsumer, test_pid: self())
+      GenStage.sync_subscribe(consumer, to: aggregator)
+
+      time1 = ~U[2024-01-15 10:00:00Z]
+      time2 = ~U[2024-01-15 10:00:01Z]
+
+      # Send events with different times and sources
+      TestHelpers.send_events(p1, [
+        %MarketEvent{time: time1, source: "source1", data: %{"p1" => 1}},
+        %MarketEvent{time: time2, source: "source1", data: %{"p1" => 2}}
+      ])
+
+      TestHelpers.send_events(p2, [
+        %MarketEvent{time: time1, source: "source2", data: %{"p2" => :a}},
+        %MarketEvent{time: time2, source: "source2", data: %{"p2" => :b}}
+      ])
+
+      # Receive merged events
+      assert_receive {:events, events}, 1000
+      assert length(events) == 2
+
+      # First merged event should preserve time and source from first producer
+      first_event = Enum.at(events, 0)
+
+      assert %MarketEvent{time: ^time1, source: "source1", data: %{"p1" => 1, "p2" => :a}} =
+               first_event
+
+      # Second merged event
+      second_event = Enum.at(events, 1)
+
+      assert %MarketEvent{time: ^time2, source: "source1", data: %{"p1" => 2, "p2" => :b}} =
+               second_event
+    end
   end
 end
