@@ -2,7 +2,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.DataFeeds.MemoryDataFeed
-  alias TheoryCraft.{Tick, Bar}
+  alias TheoryCraft.{Bar, ExchangeData, Tick}
 
   ## Setup
 
@@ -14,11 +14,13 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
     bars = sample_bars()
     ticks_us = sample_ticks_microsecond()
     ticks_sec = sample_ticks_second()
+    exchange_data = sample_exchange_data()
 
     tick_feed = MemoryDataFeed.new(ticks)
     bar_feed = MemoryDataFeed.new(bars)
     tick_feed_us = MemoryDataFeed.new(ticks_us, :microsecond)
     tick_feed_sec = MemoryDataFeed.new(ticks_sec, :auto)
+    exchange_feed = MemoryDataFeed.new(exchange_data)
 
     %{
       ticks: ticks,
@@ -28,7 +30,9 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
       tick_feed: tick_feed,
       bar_feed: bar_feed,
       tick_feed_us: tick_feed_us,
-      tick_feed_sec: tick_feed_sec
+      tick_feed_sec: tick_feed_sec,
+      exchange_data: exchange_data,
+      exchange_feed: exchange_feed
     }
   end
 
@@ -165,6 +169,16 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
 
       assert Enum.to_list(stream) == []
     end
+
+    test "streams exchange metrics data from memory in order", %{
+      exchange_feed: exchange_feed,
+      exchange_data: exchange_data
+    } do
+      {:ok, stream} = MemoryDataFeed.stream(from: exchange_feed)
+      streamed_data = Enum.to_list(stream)
+
+      assert streamed_data == exchange_data
+    end
   end
 
   describe "stream!/1" do
@@ -267,6 +281,29 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeedTest do
         bid: 1.2344,
         ask_volume: 1000.0,
         bid_volume: 1500.0
+      }
+    ]
+  end
+
+  defp sample_exchange_data() do
+    base_time = ~U[2025-09-04 10:00:00Z]
+
+    [
+      %ExchangeData{
+        time: base_time,
+        symbol: "BTCUSDT",
+        price: 42_000.5,
+        open_interest: 125_000.0,
+        volume: 1_500.0,
+        funding_rate: 0.0001
+      },
+      %ExchangeData{
+        time: DateTime.add(base_time, 60, :second),
+        symbol: "BTCUSDT",
+        price: 42_100.0,
+        open_interest: 125_500.0,
+        volume: 1_200.0,
+        funding_rate: 0.00012
       }
     ]
   end

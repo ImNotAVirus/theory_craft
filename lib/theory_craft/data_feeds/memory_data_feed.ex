@@ -9,7 +9,7 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
   use TheoryCraft.DataFeed
 
   alias __MODULE__
-  alias TheoryCraft.{Bar, Tick}
+  alias TheoryCraft.{Bar, ExchangeData, Tick}
   alias TheoryCraft.DataFeed
 
   defstruct [:table, :precision]
@@ -142,6 +142,19 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
     {index, DateTime.to_unix(time, precision), open, high, low, close, volume}
   end
 
+  defp dump(%ExchangeData{} = data, index, precision) do
+    %ExchangeData{
+      time: time,
+      symbol: symbol,
+      price: price,
+      open_interest: open_interest,
+      volume: volume,
+      funding_rate: funding_rate
+    } = data
+
+    {{DateTime.to_unix(time, precision), index}, symbol, price, open_interest, volume, funding_rate}
+  end
+
   defp load({time, ask, bid, ask_volume, bid_volume}, precision) do
     %Tick{
       time: DateTime.from_unix!(time, precision),
@@ -160,6 +173,17 @@ defmodule TheoryCraft.DataFeeds.MemoryDataFeed do
       low: low,
       close: close,
       volume: volume
+    }
+  end
+
+  defp load({{time, _index}, symbol, price, open_interest, volume, funding_rate}, precision) do
+    %ExchangeData{
+      time: DateTime.from_unix!(time, precision),
+      symbol: symbol,
+      price: price,
+      open_interest: open_interest,
+      volume: volume,
+      funding_rate: funding_rate
     }
   end
 end
