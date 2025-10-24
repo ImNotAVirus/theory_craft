@@ -23,9 +23,9 @@ defmodule TheoryCraft.Test do
   Documentation for `TheoryCraft`.
   """
 
-  import TheoryCraft.MarketSimulator
+  import TheoryCraft.MarketSource
 
-  alias TheoryCraft.MarketSimulator
+  alias TheoryCraft.MarketSource
   alias TheoryCraft.Utils
 
   ## Public API
@@ -42,7 +42,7 @@ defmodule TheoryCraft.Test do
     # opts = ctrader_opts()
 
     stream =
-      %MarketSimulator{}
+      %MarketSource{}
       # |> add_data(memory_stream, name: "ticks")
       |> add_data_ticks_from_csv(full_path, opts)
       |> resample("D", data: "XAUUSD", name: "XAUUSD_daily")
@@ -156,7 +156,7 @@ input_file =
 
 ```elixir
 alias KinoTheoryCraft.Control.{Chart, ChartController, Streamer}
-alias TheoryCraft.MarketSimulator
+alias TheoryCraft.MarketSource
 chart = Chart.new([], "Europe/Paris" || "Etc/UTC")
 initial_speed = 100
 controller = ChartController.new(speed: initial_speed, status: :paused)
@@ -167,10 +167,10 @@ timeframe = "m5"
 
 create_streamer = fn speed ->
   resampled_stream =
-    %MarketSimulator{}
-    |> MarketSimulator.add_data(input.stream, name: "data")
-    |> MarketSimulator.resample(timeframe, name: "data_#{timeframe}")
-    |> MarketSimulator.stream()
+    %MarketSource{}
+    |> MarketSource.add_data(input.stream, name: "data")
+    |> MarketSource.resample(timeframe, name: "data_#{timeframe}")
+    |> MarketSource.stream()
 
   {:ok, streamer} =
     Streamer.start_link(resampled_stream,
@@ -248,18 +248,18 @@ Kino.Layout.grid([chart, bottom_row], boxed: true, gap: 12)
 ```elixir
 require TheoryCraftTA.TA, as: TA
 
-alias TheoryCraft.MarketSimulator
+alias TheoryCraft.MarketSource
 
 Logger.configure(level: :info)
 
-%MarketSimulator{}
-|> MarketSimulator.add_data(input_file.stream, name: "data")
-|> MarketSimulator.resample("m5", name: "data_m5")
-|> MarketSimulator.add_indicators_layer([
-  TA.sma(data[:ask], 2),
+%MarketSource{}
+|> MarketSource.add_data(input_file.stream, name: "data")
+|> MarketSource.resample("m5", name: "data_m5")
+|> MarketSource.add_indicators_layer([
+  TA.sma(data[:ask_volume], 1000),
   TA.ema(data_m5[:close], 3),
 ])
-|> MarketSimulator.stream()
+|> MarketSource.stream()
 |> Enum.at(3300)
 # |> Enum.slice(3300..3302)
 ```

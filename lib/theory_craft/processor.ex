@@ -44,17 +44,18 @@ defmodule TheoryCraft.Processor do
 
   - `TheoryCraft.Processors.TickToBarProcessor` - Converts tick data to OHLC bars
 
-  ## Integration with MarketSimulator
+  ## Integration with MarketSource
 
-  Processors are typically used with `TheoryCraft.MarketSimulator` which orchestrates
+  Processors are typically used with `TheoryCraft.MarketSource` which orchestrates
   the data flow through multiple processors:
 
-      simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(tick_stream, name: "eurusd")
-      |> MarketSimulator.add_processor(MyProcessor, processor_opts)
-      |> MarketSimulator.stream()
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(tick_stream, name: "eurusd")
+        |> MarketSource.add_processor(MyProcessor, processor_opts)
+        |> MarketSource.stream()
 
-  See `TheoryCraft.MarketSimulator` for more details on building processing pipelines.
+  See `TheoryCraft.MarketSource` for more details on building processing pipelines.
   """
 
   alias TheoryCraft.MarketEvent

@@ -60,7 +60,7 @@ The system uses GenStage for backpressure-aware streaming:
   - `AggregatorStage`: Synchronize and merge parallel outputs
   - `StageHelpers`: Shared utilities (option extraction, producer/consumer tracking, Flow termination pattern)
 
-#### MarketSimulator
+#### MarketSource
 
 Fluent API for building GenStage pipelines dynamically:
 - Supports multiple data feeds
@@ -106,7 +106,7 @@ All stages support:
 
        import TheoryCraft.TimeFrame
 
-       alias TheoryCraft.MarketSimulator
+       alias TheoryCraft.MarketSource
        alias TheoryCraft.Processor
 
        ## Module attributes

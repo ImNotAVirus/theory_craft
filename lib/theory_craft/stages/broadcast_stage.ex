@@ -5,7 +5,7 @@ defmodule TheoryCraft.Stages.BroadcastStage do
   This stage acts as a pass-through that receives events from a single producer
   and broadcasts them to multiple consumers using `GenStage.BroadcastDispatcher`.
 
-  Used internally by MarketSimulator to fan-out events to parallel processors.
+  Used internally by MarketSource to fan-out events to parallel processors.
 
   ## Examples
 

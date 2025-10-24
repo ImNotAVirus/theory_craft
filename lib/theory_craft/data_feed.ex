@@ -45,19 +45,20 @@ defmodule TheoryCraft.DataFeed do
   The `use TheoryCraft.DataFeed` macro automatically provides a default `stream!/1`
   implementation that raises on errors.
 
-  ## Usage with MarketSimulator
+  ## Usage with MarketSource
 
-  Data feeds are typically used as the starting point for a `MarketSimulator` pipeline:
+  Data feeds are typically used as the starting point for a `MarketSource` pipeline:
 
       {:ok, feed_stream} = MyDataFeed.stream(symbol: "EURUSD", start_date: ~D[2024-01-01])
 
-      simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(feed_stream, name: "eurusd_ticks")
-      |> MarketSimulator.add_processor(TickToBarProcessor, data: "eurusd_ticks", timeframe: "m5")
-      |> MarketSimulator.stream()
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(feed_stream, name: "eurusd_ticks")
+        |> MarketSource.add_processor(TickToBarProcessor, data: "eurusd_ticks", timeframe: "m5")
+        |> MarketSource.stream()
 
       # Process the data
-      Enum.each(simulator, fn event ->
+      Enum.each(market, fn event ->
         # Handle each market event
       end)
 
@@ -82,7 +83,7 @@ defmodule TheoryCraft.DataFeed do
 
   - Processors like `TickToBarProcessor` assume time-ordered data for bar boundary detection
   - Strategies depend on receiving events in the order they occurred historically
-  - The `MarketSimulator` does not perform any sorting or time validation
+  - The `MarketSource` does not perform any sorting or time validation
 
   If your data source does not guarantee ordering, you must sort the data before yielding it.
   """

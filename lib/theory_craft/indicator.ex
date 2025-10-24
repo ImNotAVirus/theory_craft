@@ -84,27 +84,42 @@ defmodule TheoryCraft.Indicator do
 
   ## Built-in Indicators
 
-  Currently, there are no built-in indicators. Users can create custom indicators
-  by implementing this behaviour.
+  Built-in technical indicators are provided in a separate package: `theory_craft_ta`.
 
-  ## Integration with MarketSimulator
+  See https://github.com/ImNotAVirus/theory_craft_ta for available indicators and installation.
 
-  Indicators are used through `TheoryCraft.Processors.IndicatorProcessor`:
+  ## Integration with MarketSource
 
-      simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(bar_stream, name: "eurusd_m5")
-      |> MarketSimulator.add_indicator(
-        MyIndicator.SMA,
-        data: "eurusd_m5",
-        name: "sma20",
-        period: 20
-      )
-      |> MarketSimulator.stream()
+  ### Using Built-in Indicators (from theory_craft_ta)
 
-  The `data` option specifies which data stream to use and is passed to the indicator's `init/1`.
-  The `name` option specifies the output key in the event and is handled by IndicatorProcessor.
+  Built-in indicators from `theory_craft_ta` use the `TA` macro for convenient syntax:
 
-  See `TheoryCraft.MarketSimulator` for more details on building processing pipelines.
+      require TheoryCraftTA.TA, as: TA
+
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(bar_stream, name: "eurusd_m5")
+        |> MarketSource.add_indicator(TA.sma(eurusd_m5[:close], 20, name: "sma20"))
+        |> MarketSource.stream()
+
+  The `TA` macro provides a convenient syntax for defining indicators with automatic
+  data source and name configuration.
+
+  ### Using Custom Indicators
+
+  Custom indicators use the tuple spec syntax `{module, opts}`:
+
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(bar_stream, name: "eurusd_m5")
+        |> MarketSource.add_indicator({MyIndicator.SMA, [
+          data: "eurusd_m5",
+          period: 20,
+          name: "my_sma20"
+        ]})
+        |> MarketSource.stream()
+
+  See `TheoryCraft.MarketSource` for more details on building processing pipelines.
   """
 
   alias TheoryCraft.{IndicatorValue, MarketEvent}

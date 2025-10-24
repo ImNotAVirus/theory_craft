@@ -1,80 +1,50 @@
-defmodule TheoryCraft.MarketSimulator do
+defmodule TheoryCraft.MarketSource do
   @moduledoc """
   Main orchestrator for building and running backtesting simulations using GenStage pipelines.
 
-  The `MarketSimulator` provides a fluent API for constructing complex data processing pipelines
+  The `MarketSource` provides a fluent API for constructing complex data processing pipelines
   with market data. It uses a builder pattern to configure the pipeline, then materializes it
-  into a GenStage architecture when `stream/1` or `run/1` is called.
-
-  ## Architecture
-
-  The simulator uses a layered GenStage pipeline:
-  - **DataFeedStage**: Producer that emits market data (ticks, bars)
-  - **ProcessorStage**: Producer-consumer that transforms events (e.g., tick → bar)
-  - **BroadcastStage**: Broadcasts events to multiple parallel processors
-  - **AggregatorStage**: Synchronizes and merges outputs from parallel processors
+  into a streaming architecture when `stream/1` is called.
 
   ## Usage
 
+      require TheoryCraftTA.TA, as: TA
+
       # Build a pipeline with explicit names
-      simulator =
-        %MarketSimulator{}
+      market =
+        %MarketSource{}
         |> add_data_ticks_from_csv("ticks.csv", name: "XAUUSD")
-        |> resample("m5", name: "XAUUSD_m5", data: "XAUUSD")
-        |> resample("h1", name: "XAUUSD_h1", data: "XAUUSD")
+        |> resample("m5", data: "XAUUSD", name: "XAUUSD_m5")
+        |> resample("h1", data: "XAUUSD", name: "XAUUSD_h1")
         |> add_indicators_layer([
-          {MyIndicator, name: "ind1", data: "XAUUSD_m5"},
-          {MyIndicator, name: "ind2", data: "XAUUSD_h1"}
+          TA.sma(XAUUSD_m5[:close], 20, name: "ind1"),
+          TA.ema(XAUUSD_h1[:close], 50, name: "ind2")
         ])
 
       # Stream events
-      simulator
+      market
       |> stream()
       |> Enum.each(fn event ->
         # Process each market event
       end)
 
-      # Or run to completion
-      simulator |> run()
-
       # Simplified usage with default names
-      %MarketSimulator{}
+      %MarketSource{}
       |> add_data_ticks_from_csv("ticks.csv", name: "XAUUSD")
       |> resample("m5")   # data="XAUUSD", name="XAUUSD_m5" (automatic)
       |> resample("h1")   # data="XAUUSD", name="XAUUSD_h1" (automatic)
       |> stream()
 
-  ## Layers
-
-  The pipeline is built as a sequence of layers:
-  - Each layer processes events from the previous layer
-  - Single-processor layers use one `ProcessorStage`
-  - Multi-processor layers use `BroadcastStage → N × ProcessorStage → AggregatorStage`
-
-  ## Data Tracking
-
-  The simulator maintains two separate collections:
-
-  - **`data_feeds`**: Keyword list tracking only the initial data sources.
-    Format: `[name: {data_feed_module, opts}]`
-    Example: `[{"XAUUSD", {MemoryDataFeed, [from: feed]}}]`
-
-  - **`data_streams`**: List of all available data stream names (feeds + processor outputs).
-    Example: `["XAUUSD", "XAUUSD_m5", "XAUUSD_h1"]`
-
-  This distinction allows processors to reference any available data stream, while
-  only tracking the original data sources separately.
-
   ## Default Names
 
-  To simplify pipeline construction, the simulator provides automatic name generation:
+  To simplify pipeline construction, the market source provides automatic name generation:
 
   ### Data Feed Names
 
   When `add_data/3` is called without a `:name` option, the name defaults to a numeric
   index (0 for the first feed, 1 for the second, etc.):
 
-      add_data(simulator, MemoryDataFeed, from: feed)
+      add_data(market, MemoryDataFeed, from: feed)
       # name defaults to 0
 
   ### Processor Names
@@ -87,12 +57,12 @@ defmodule TheoryCraft.MarketSimulator do
   Example:
 
       # With data feed named "XAUUSD"
-      resample(simulator, "m5")
-      # Equivalent to: resample(simulator, "m5", data: "XAUUSD", name: "XAUUSD_m5")
+      resample(market, "m5")
+      # Equivalent to: resample(market, "m5", data: "XAUUSD", name: "XAUUSD_m5")
 
   This allows for concise pipeline construction when working with a single data feed:
 
-      %MarketSimulator{}
+      %MarketSource{}
       |> add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
       |> resample("m1")   # Creates "XAUUSD_m1"
       |> resample("m5")   # Creates "XAUUSD_m5"
@@ -133,7 +103,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   @type strategy_spec :: {module(), Keyword.t()}
 
-  @type t :: %MarketSimulator{
+  @type t :: %MarketSource{
           data_feeds: Keyword.t({module(), Keyword.t()}),
           data_streams: [String.t() | non_neg_integer()],
           processor_layers: [[Processor.spec()]],
@@ -142,19 +112,21 @@ defmodule TheoryCraft.MarketSimulator do
           commission: number() | nil
         }
 
+  # require TheoryCraftTA.TA, as: TA
+  #
   # stream =
-  #   %MarketSimulator{}
+  #   %MarketSource{}
   #   |> add_data_ticks_from_csv(filename, [name: "XAUUSD"] ++ opts)
-  #   |> resample("m5", name: "XAUUSD_m5", data: "XAUUSD")
-  #   |> resample("h1", name: "XAUUSD_h1", data: "XAUUSD")
+  #   |> resample("m5", data: "XAUUSD", name: "XAUUSD_m5")
+  #   |> resample("h1", data: "XAUUSD", name: "XAUUSD_h1")
   #   |> add_indicators_layer([
-  #     {TheoryCraft.Indicators.Volume, name: "volume", data: "XAUUSD_m5"},
-  #     {TheoryCraft.Indicators.SMA, period: 20, name: "short_term_m5", data: "XAUUSD_m5"},
-  #     {TheoryCraft.Indicators.SMA, period: 100, name: "long_term_m5", data: "XAUUSD_m5"},
-  #     {TheoryCraft.Indicators.ATR, period: 14, name: "atr_14", data: "XAUUSD_m5"},
-  #     {TheoryCraft.Indicators.RSI, period: 14, name: "rsi_14", data: "XAUUSD_h1"},
-  #   ], concurrency: 4)    
-  #   |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "volume_sma_14", data: "volume")
+  #     TA.volume(XAUUSD_m5[:volume], name: "volume"),
+  #     TA.sma(XAUUSD_m5[:close], 20, name: "short_term_m5"),
+  #     TA.sma(XAUUSD_m5[:close], 100, name: "long_term_m5"),
+  #     TA.atr(XAUUSD_m5, 14, name: "atr_14"),
+  #     TA.rsi(XAUUSD_h1[:close], 14, name: "rsi_14")
+  #   ], concurrency: 4)
+  #   |> add_indicator(TA.sma(volume[:value], 14, name: "volume_sma_14"))
   #   |> add_strategy(TheoryCraft.Strategies.MyStrategy)
   #   |> set_balance(100_000)
   #   |> set_commission(0.001)
@@ -167,7 +139,7 @@ defmodule TheoryCraft.MarketSimulator do
   ## Public API
 
   @doc """
-  Adds a data source to the market simulator.
+  Adds a data source to the market source.
 
   The `:name` option is optional. If not provided, the name defaults to the number
   of existing data feeds (0 for the first feed, 1 for the second, etc.).
@@ -177,7 +149,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `source`: Either:
       - A module implementing the `TheoryCraft.DataFeed` behaviour
       - An `Enumerable` (list, stream, etc.) containing `Tick` or `Bar` structs
@@ -189,18 +161,18 @@ defmodule TheoryCraft.MarketSimulator do
   ## Examples
 
       # With DataFeed module and explicit name
-      add_data(simulator, MemoryDataFeed, from: feed, name: "XAUUSD")
+      add_data(market, MemoryDataFeed, from: feed, name: "XAUUSD")
 
       # With DataFeed module and default name (will be 0)
-      add_data(simulator, MemoryDataFeed, from: feed)
+      add_data(market, MemoryDataFeed, from: feed)
 
       # With enumerable (stream or list)
       ticks = [%Tick{...}, %Tick{...}]
-      add_data(simulator, ticks, name: "XAUUSD")
+      add_data(market, ticks, name: "XAUUSD")
 
       # With stream
       stream = Stream.map(ticks, & &1)
-      add_data(simulator, stream, name: "XAUUSD")
+      add_data(market, stream, name: "XAUUSD")
 
   ## Notes
 
@@ -209,11 +181,11 @@ defmodule TheoryCraft.MarketSimulator do
 
   """
   @spec add_data(t(), module() | Enumerable.t(), Keyword.t()) :: t()
-  def add_data(simulator, source, opts \\ [])
+  def add_data(market, source, opts \\ [])
 
-  def add_data(%MarketSimulator{} = simulator, data_feed_spec, opts)
+  def add_data(%MarketSource{} = market, data_feed_spec, opts)
       when is_atom(data_feed_spec) or is_tuple(data_feed_spec) do
-    %MarketSimulator{data_feeds: data_feeds, data_streams: data_streams} = simulator
+    %MarketSource{data_feeds: data_feeds, data_streams: data_streams} = market
 
     if length(data_feeds) > 0 do
       raise ArgumentError, "Currently only one data feed is supported"
@@ -227,15 +199,15 @@ defmodule TheoryCraft.MarketSimulator do
     # Remove :name from opts and merge with data_feed_opts
     feed_opts = opts |> Keyword.delete(:name) |> Keyword.merge(data_feed_opts)
 
-    %MarketSimulator{
-      simulator
+    %MarketSource{
+      market
       | data_feeds: [{name, {data_feed_module, feed_opts}}],
         data_streams: [name | data_streams]
     }
   end
 
-  def add_data(%MarketSimulator{} = simulator, enumerable, opts) do
-    %MarketSimulator{data_feeds: data_feeds, data_streams: data_streams} = simulator
+  def add_data(%MarketSource{} = market, enumerable, opts) do
+    %MarketSource{data_feeds: data_feeds, data_streams: data_streams} = market
 
     if length(data_feeds) > 0 do
       raise ArgumentError, "Currently only one data feed is supported"
@@ -244,8 +216,8 @@ defmodule TheoryCraft.MarketSimulator do
     # Default name = number of existing feeds
     name = Keyword.get_lazy(opts, :name, fn -> length(data_feeds) end)
 
-    %MarketSimulator{
-      simulator
+    %MarketSource{
+      market
       | data_feeds: [{name, enumerable}],
         data_streams: [name | data_streams]
     }
@@ -256,15 +228,15 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `file_path`: The path to the CSV file.
     - `opts`: Optional parameters for the data feed.
 
   """
   @spec add_data_ticks_from_csv(t(), String.t(), Keyword.t()) :: t()
-  def add_data_ticks_from_csv(%MarketSimulator{} = simulator, file_path, opts \\ []) do
+  def add_data_ticks_from_csv(%MarketSource{} = market, file_path, opts \\ []) do
     data_feed_opts = [file: file_path] ++ opts
-    add_data(simulator, TicksCSVDataFeed, data_feed_opts)
+    add_data(market, TicksCSVDataFeed, data_feed_opts)
   end
 
   @doc """
@@ -279,7 +251,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `timeframe`: The new timeframe to resample the data to.
     - `opts`: Optional parameters:
       - `:data` - Source data name (default: data feed name)
@@ -289,18 +261,18 @@ defmodule TheoryCraft.MarketSimulator do
   ## Examples
 
       # With explicit data and name
-      resample(simulator, "m5", data: "XAUUSD", name: "XAUUSD_m5")
+      resample(market, "m5", data: "XAUUSD", name: "XAUUSD_m5")
 
       # With default names (if data feed is named "XAUUSD")
-      resample(simulator, "m5")  # data="XAUUSD", name="XAUUSD_m5"
+      resample(market, "m5")  # data="XAUUSD", name="XAUUSD_m5"
 
   """
   @spec resample(t(), String.t(), Keyword.t()) :: t()
-  def resample(%MarketSimulator{} = simulator, timeframe, opts \\ []) do
-    %MarketSimulator{
+  def resample(%MarketSource{} = market, timeframe, opts \\ []) do
+    %MarketSource{
       data_streams: data_streams,
       processor_layers: processor_layers
-    } = simulator
+    } = market
 
     if not TimeFrame.valid?(timeframe) do
       raise ArgumentError, "Invalid timeframe #{inspect(timeframe)}"
@@ -309,7 +281,7 @@ defmodule TheoryCraft.MarketSimulator do
     # Deduce :data if not provided (from data feeds)
     data_name =
       Keyword.get_lazy(opts, :data, fn ->
-        fetch_default_data_name(simulator)
+        fetch_default_data_name(market)
       end)
 
     # Validate that data_name exists
@@ -333,8 +305,8 @@ defmodule TheoryCraft.MarketSimulator do
     processor_spec = {TickToBarProcessor, processor_opts}
 
     # Add new layer with single processor and track new data stream
-    %MarketSimulator{
-      simulator
+    %MarketSource{
+      market
       | processor_layers: processor_layers ++ [[processor_spec]],
         data_streams: [output_name | data_streams]
     }
@@ -356,31 +328,33 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `processor_specs`: List of `{module, opts}` tuples for each processor.
     - `opts`: Optional parameters (e.g., `:concurrency` - currently unused).
 
   ## Examples
 
+      require TheoryCraftTA.TA, as: TA
+
       # With explicit data and names
-      simulator
+      market
       |> add_indicators_layer([
-        {TheoryCraft.Indicators.Volume, name: "volume", data: "XAUUSD_m5"},
-        {TheoryCraft.Indicators.SMA, period: 20, name: "sma_20", data: "XAUUSD_m5"}
+        TA.volume(XAUUSD_m5[:volume], name: "volume"),
+        TA.sma(XAUUSD_m5[:close], 20, name: "sma_20")
       ])
 
-      # With default data (if single data feed)
-      simulator
+      # With default names (auto-generated)
+      market
       |> add_indicators_layer([
-        {TheoryCraft.Indicators.Volume, name: "volume"},
-        {TheoryCraft.Indicators.SMA, period: 20, name: "sma_20"}
+        TA.volume(XAUUSD_m5[:volume]),
+        TA.sma(XAUUSD_m5[:close], 20)
       ])
 
   """
   @spec add_indicators_layer(t(), [Indicator.spec()], Keyword.t()) :: t()
-  def add_indicators_layer(%MarketSimulator{} = simulator, indicator_specs, _opts \\ [])
+  def add_indicators_layer(%MarketSource{} = market, indicator_specs, _opts \\ [])
       when is_list(indicator_specs) do
-    %MarketSimulator{data_streams: data_streams, processor_layers: processor_layers} = simulator
+    %MarketSource{data_streams: data_streams, processor_layers: processor_layers} = market
 
     if indicator_specs == [] do
       raise ArgumentError, "indicator_specs cannot be empty"
@@ -394,7 +368,7 @@ defmodule TheoryCraft.MarketSimulator do
         # Deduce :data if not provided
         data_name =
           Keyword.get_lazy(indicator_opts, :data, fn ->
-            fetch_default_data_name(simulator)
+            fetch_default_data_name(market)
           end)
 
         # Validate that data source exists
@@ -430,8 +404,8 @@ defmodule TheoryCraft.MarketSimulator do
       end)
 
     # Add new layer with multiple processors and track new data streams
-    %MarketSimulator{
-      simulator
+    %MarketSource{
+      market
       | processor_layers: processor_layers ++ [enhanced_specs],
         data_streams: new_data_names ++ data_streams
     }
@@ -441,7 +415,7 @@ defmodule TheoryCraft.MarketSimulator do
   Adds a single indicator/processor as a new layer.
 
   This is a convenience function that creates a layer with a single processor.
-  Equivalent to `add_indicators_layer(simulator, [{module, opts}])`.
+  Equivalent to `add_indicators_layer(market, [{module, opts}])`.
 
   ## Default Names
 
@@ -452,39 +426,37 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `processor_module`: The processor/indicator module.
     - `opts`: Options for the processor.
 
   ## Examples
 
-      # With explicit data and name
-      simulator
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14", data: "volume")
+      require TheoryCraftTA.TA, as: TA
 
-      # With default data (if single data feed)
-      simulator
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14, name: "sma_14")
+      # With explicit name
+      market
+      |> add_indicator(TA.sma(volume[:value], 14, name: "sma_14"))
 
-      # With default name (generates "sma")
-      simulator
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14)
+      # With default name (auto-generated from indicator type)
+      market
+      |> add_indicator(TA.sma(eurusd_m5[:close], 14))
 
-      # Multiple indicators with same module (generates "sma", "sma_1", "sma_2")
-      simulator
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 14)
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 20)
-      |> add_indicator(TheoryCraft.Indicators.SMA, period: 50)
+      # Multiple indicators with different periods
+      market
+      |> add_indicator(TA.sma(eurusd_m5[:close], 14))
+      |> add_indicator(TA.sma(eurusd_m5[:close], 20))
+      |> add_indicator(TA.sma(eurusd_m5[:close], 50))
 
   """
   @spec add_indicator(t(), module(), Keyword.t()) :: t()
-  def add_indicator(%MarketSimulator{} = simulator, processor_module, opts) do
-    %MarketSimulator{data_streams: data_streams, processor_layers: processor_layers} = simulator
+  def add_indicator(%MarketSource{} = market, processor_module, opts) do
+    %MarketSource{data_streams: data_streams, processor_layers: processor_layers} = market
 
     # Deduce :data if not provided
     data_name =
       Keyword.get_lazy(opts, :data, fn ->
-        fetch_default_data_name(simulator)
+        fetch_default_data_name(market)
       end)
 
     # Validate data source
@@ -515,50 +487,50 @@ defmodule TheoryCraft.MarketSimulator do
     processor_spec = {IndicatorProcessor, Keyword.put(enhanced_opts, :module, processor_module)}
 
     # Add new layer with single processor and track new data stream
-    %MarketSimulator{
-      simulator
+    %MarketSource{
+      market
       | processor_layers: processor_layers ++ [[processor_spec]],
         data_streams: [output_name | data_streams]
     }
   end
 
   @doc """
-  Adds a trading strategy to the simulator.
+  Adds a trading strategy to the market source.
 
-  Multiple strategies can be added to the simulator. Each strategy can have its own
+  Multiple strategies can be added to the market source. Each strategy can have its own
   configuration options.
 
   **Note**: Strategy execution is not yet implemented.
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `strategy_module`: The strategy module to use.
     - `opts`: Optional parameters for the strategy (default: `[]`).
 
   ## Examples
 
       # Add strategy without options
-      add_strategy(simulator, MyStrategy)
+      add_strategy(market, MyStrategy)
 
       # Add strategy with options
-      add_strategy(simulator, MyStrategy, risk_level: :high, max_positions: 5)
+      add_strategy(market, MyStrategy, risk_level: :high, max_positions: 5)
 
       # Add multiple strategies
-      simulator
+      market
       |> add_strategy(Strategy1, param1: 100)
       |> add_strategy(Strategy2, param2: 200)
 
   """
   @spec add_strategy(t(), module() | {module(), Keyword.t()}, Keyword.t()) :: t()
-  def add_strategy(%MarketSimulator{} = simulator, strategy_spec, opts \\ [])
+  def add_strategy(%MarketSource{} = market, strategy_spec, opts \\ [])
       when is_atom(strategy_spec) or is_tuple(strategy_spec) do
-    %MarketSimulator{strategies: strategies} = simulator
+    %MarketSource{strategies: strategies} = market
     # When opts is provided, merge them with the spec opts
     {strategy_module, spec_opts} = Utils.normalize_spec(strategy_spec)
     strategy_opts = Keyword.merge(spec_opts, opts)
 
-    %MarketSimulator{simulator | strategies: strategies ++ [{strategy_module, strategy_opts}]}
+    %MarketSource{market | strategies: strategies ++ [{strategy_module, strategy_opts}]}
   end
 
   @doc """
@@ -568,13 +540,13 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `balance`: The initial balance amount.
 
   """
   @spec set_balance(t(), number()) :: t()
-  def set_balance(%MarketSimulator{} = simulator, balance) when is_number(balance) do
-    %MarketSimulator{simulator | balance: balance}
+  def set_balance(%MarketSource{} = market, balance) when is_number(balance) do
+    %MarketSource{market | balance: balance}
   end
 
   @doc """
@@ -584,17 +556,17 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `commission`: The commission rate (e.g., 0.001 for 0.1%).
 
   """
   @spec set_commission(t(), number()) :: t()
-  def set_commission(%MarketSimulator{} = simulator, commission) when is_number(commission) do
-    %MarketSimulator{simulator | commission: commission}
+  def set_commission(%MarketSource{} = market, commission) when is_number(commission) do
+    %MarketSource{market | commission: commission}
   end
 
   @doc """
-  Materializes the simulator into a GenStage pipeline and returns an Enumerable stream.
+  Materializes the market source into a GenStage pipeline and returns an Enumerable stream.
 
   This function:
   1. Starts a DataFeedStage producer from the data feed spec
@@ -605,7 +577,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Parameters
 
-    - `simulator`: The market simulator.
+    - `market`: The market source.
     - `opts`: Optional parameters (currently unused).
 
   ## Returns
@@ -614,14 +586,14 @@ defmodule TheoryCraft.MarketSimulator do
 
   ## Examples
 
-      simulator
-      |> MarketSimulator.stream()
+      market
+      |> MarketSource.stream()
       |> Enum.take(100)
 
   """
   @spec stream(t(), Keyword.t()) :: Enumerable.t(MarketEvent.t())
-  def stream(%MarketSimulator{} = simulator, _opts \\ []) do
-    %MarketSimulator{data_feeds: data_feeds} = simulator
+  def stream(%MarketSource{} = market, _opts \\ []) do
+    %MarketSource{data_feeds: data_feeds} = market
 
     if data_feeds == [] do
       raise ArgumentError,
@@ -629,38 +601,10 @@ defmodule TheoryCraft.MarketSimulator do
     end
 
     # Materialize the GenStage pipeline
-    {data_feed_pid, final_stage_pid} = materialize_pipeline(simulator)
+    {data_feed_pid, final_stage_pid} = materialize_pipeline(market)
 
     # Return GenStage stream with producers specified
     GenStage.stream([{final_stage_pid, cancel: :transient}], producers: [data_feed_pid])
-  end
-
-  @doc """
-  Runs the simulator pipeline to completion.
-
-  Equivalent to calling `stream/1` and consuming all events with `Enum.to_list/1`,
-  but discards the results. Useful for backtesting where you only care about
-  side effects (e.g., strategy execution, logging).
-
-  ## Parameters
-
-    - `simulator`: The market simulator.
-    - `opts`: Optional parameters passed to `stream/1`.
-
-  ## Returns
-
-  `:ok`
-
-  ## Examples
-
-      simulator
-      |> MarketSimulator.run()
-
-  """
-  @spec run(t(), Keyword.t()) :: :ok
-  def run(%MarketSimulator{} = simulator, opts \\ []) do
-    _events = simulator |> stream(opts) |> Enum.to_list()
-    :ok
   end
 
   ## Private functions
@@ -702,7 +646,7 @@ defmodule TheoryCraft.MarketSimulator do
 
   # Fetches the default data name from data feeds
   # Returns the name of the single data feed, or raises if none or multiple
-  defp fetch_default_data_name(%MarketSimulator{data_feeds: data_feeds}) do
+  defp fetch_default_data_name(%MarketSource{data_feeds: data_feeds}) do
     case data_feeds do
       [{name, _feed_spec}] ->
         name
@@ -717,8 +661,8 @@ defmodule TheoryCraft.MarketSimulator do
   end
 
   # Materializes the GenStage pipeline from specs
-  defp materialize_pipeline(%MarketSimulator{} = simulator) do
-    %MarketSimulator{data_feeds: data_feeds, processor_layers: processor_layers} = simulator
+  defp materialize_pipeline(%MarketSource{} = market) do
+    %MarketSource{data_feeds: data_feeds, processor_layers: processor_layers} = market
 
     # Extract the single data feed source (can be {module, opts} or enumerable)
     [{data_name, source}] = data_feeds

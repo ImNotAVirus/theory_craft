@@ -2,24 +2,8 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
   @moduledoc """
   A Processor that wraps a `TheoryCraft.Indicator` behaviour for integration into processing pipelines.
 
-  This processor acts as an adapter that allows indicators to participate in GenStage pipelines.
-  It handles the initialization and delegation of values from market events to the wrapped indicator module,
-  while maintaining the indicator's internal state and tracking bar boundaries.
-
-  ## Purpose
-
-  Indicators are specialized components for technical analysis that implement the
-  `TheoryCraft.Indicator` behaviour. The `IndicatorProcessor` wraps these indicators,
-  allowing them to be used seamlessly in `MarketSimulator` pipelines alongside other processors.
-
-  ## State Management
-
-  The processor maintains a minimal state structure containing:
-  - The indicator module reference
-  - The indicator's internal state
-
-  All other concerns (data stream names, output names, bar tracking) are managed
-  by the indicator itself.
+  This processor handles the initialization and delegation of values from market events to the wrapped
+  indicator module, allowing indicators to be used seamlessly in `MarketSource` pipelines.
 
   ## Examples
 
@@ -39,17 +23,19 @@ defmodule TheoryCraft.Processors.IndicatorProcessor do
       # The updated event now contains the indicator output
       updated_event.data["sma20"]  # => SMA value
 
-  ## Integration with MarketSimulator
+  ## Integration with MarketSource
 
-  Indicators are typically added to a simulator using helper methods that automatically
-  wrap them in an `IndicatorProcessor`:
+  Indicators are typically added to a market source using the `TA` macro syntax:
 
-      simulator = %MarketSimulator{}
-      |> MarketSimulator.add_data(bar_stream, name: "eurusd_m5")
-      |> MarketSimulator.add_indicator(MyIndicators.SMA, period: 20, name: "sma20")
-      |> MarketSimulator.stream()
+      require TheoryCraftTA.TA, as: TA
 
-  See `TheoryCraft.MarketSimulator` for more details.
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(bar_stream, name: "eurusd_m5")
+        |> MarketSource.add_indicator(TA.sma(eurusd_m5[:close], 20, name: "sma20"))
+        |> MarketSource.stream()
+
+  See `TheoryCraft.MarketSource` for more details.
 
   """
 

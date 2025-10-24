@@ -1,7 +1,7 @@
-defmodule TheoryCraft.MarketSimulatorTest do
+defmodule TheoryCraft.MarketSourceTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSimulator
+  alias TheoryCraft.MarketSource
   alias TheoryCraft.MarketEvent
   alias TheoryCraft.Tick
   alias TheoryCraft.Bar
@@ -25,13 +25,13 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
   ## Tests
 
-  describe "MarketSimulator GenStage pipeline" do
+  describe "MarketSource GenStage pipeline" do
     test "single resample layer", %{feed: feed} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.stream()
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick, each with current bar state)
@@ -60,11 +60,11 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
     test "multiple sequential resample layers", %{feed: feed} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m1", name: "xauusd_m1")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.stream()
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m1", name: "xauusd_m1")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick flowing through the pipeline)
@@ -84,14 +84,14 @@ defmodule TheoryCraft.MarketSimulatorTest do
     test "parallel processors with add_indicators_layer", %{feed: feed} do
       # Test parallel processing with multiple indicators
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicators_layer([
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicators_layer([
           {SimpleIndicator, data: "xauusd_m5", name: "indicator1", constant: 10.0},
           {SimpleIndicator, data: "xauusd_m5", name: "indicator2", constant: 20.0}
         ])
-        |> MarketSimulator.stream()
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should emit events with merged data from both indicators
@@ -111,15 +111,15 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
     test "mixed sequential and parallel layers", %{feed: feed} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m1", name: "xauusd_m1")
-        |> MarketSimulator.add_indicators_layer([
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m1", name: "xauusd_m1")
+        |> MarketSource.add_indicators_layer([
           {SimpleIndicator, data: "xauusd_m1", name: "ind1", constant: 5.0},
           {SMAIndicator, input: "xauusd_m1", name: "ind2", period: 3}
         ])
-        |> MarketSimulator.resample("m5", name: "final")
-        |> MarketSimulator.stream()
+        |> MarketSource.resample("m5", name: "final")
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick flowing through all layers)
@@ -140,27 +140,17 @@ defmodule TheoryCraft.MarketSimulatorTest do
       end
     end
 
-    test "run/1 consumes entire stream", %{feed: feed} do
-      result =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.run()
-
-      assert result == :ok
-    end
-
     test "add_indicator/3 creates single-processor layer", %{feed: feed} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicator(SimpleIndicator,
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicator(SimpleIndicator,
           data: "xauusd_m5",
           name: "indicator",
           constant: 15.0
         )
-        |> MarketSimulator.stream()
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick)
@@ -177,56 +167,56 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "add_strategy supports multiple strategies with options", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.add_strategy(MyStrategy, risk_level: :high)
-        |> MarketSimulator.add_strategy(AnotherStrategy, max_positions: 5, leverage: 2.0)
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.add_strategy(MyStrategy, risk_level: :high)
+        |> MarketSource.add_strategy(AnotherStrategy, max_positions: 5, leverage: 2.0)
 
-      assert length(simulator.strategies) == 2
-      assert {MyStrategy, [risk_level: :high]} in simulator.strategies
-      assert {AnotherStrategy, [max_positions: 5, leverage: 2.0]} in simulator.strategies
+      assert length(market.strategies) == 2
+      assert {MyStrategy, [risk_level: :high]} in market.strategies
+      assert {AnotherStrategy, [max_positions: 5, leverage: 2.0]} in market.strategies
     end
 
     test "raises error when no data feed configured" do
       assert_raise ArgumentError, ~r/No data feed configured/, fn ->
-        %MarketSimulator{}
-        |> MarketSimulator.stream()
+        %MarketSource{}
+        |> MarketSource.stream()
       end
     end
 
     test "raises error when adding second data feed" do
       assert_raise ArgumentError, ~r/only one data feed is supported/, fn ->
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, feed: :dummy1)
-        |> MarketSimulator.add_data(MemoryDataFeed, feed: :dummy2)
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, feed: :dummy1)
+        |> MarketSource.add_data(MemoryDataFeed, feed: :dummy2)
       end
     end
 
     test "raises error for invalid timeframe" do
       assert_raise ArgumentError, ~r/Invalid timeframe "invalid_timeframe"/, fn ->
-        %MarketSimulator{}
-        |> MarketSimulator.resample("invalid_timeframe")
+        %MarketSource{}
+        |> MarketSource.resample("invalid_timeframe")
       end
     end
 
     test "raises error for empty indicator list in add_indicators_layer" do
       assert_raise ArgumentError, ~r/indicator_specs cannot be empty/, fn ->
-        %MarketSimulator{}
-        |> MarketSimulator.add_indicators_layer([])
+        %MarketSource{}
+        |> MarketSource.add_indicators_layer([])
       end
     end
   end
 
   describe "default names and data tracking" do
     test "add_data with module uses numeric index when name not provided", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed)
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed)
 
       # Default name should be 0 (first feed)
-      assert simulator.data_streams == [0]
-      assert [{0, {MemoryDataFeed, opts}}] = simulator.data_feeds
+      assert market.data_streams == [0]
+      assert [{0, {MemoryDataFeed, opts}}] = market.data_feeds
       # :name is NOT in opts (it's stored as the keyword list key)
       assert Keyword.fetch!(opts, :from) == feed
       refute Keyword.has_key?(opts, :name)
@@ -234,10 +224,10 @@ defmodule TheoryCraft.MarketSimulatorTest do
 
     test "add_data with enumerable (list)", %{ticks: ticks} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(ticks, name: "xauusd")
-        |> MarketSimulator.resample("m5")
-        |> MarketSimulator.stream()
+        %MarketSource{}
+        |> MarketSource.add_data(ticks, name: "xauusd")
+        |> MarketSource.resample("m5")
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick)
@@ -256,10 +246,10 @@ defmodule TheoryCraft.MarketSimulatorTest do
       stream = Stream.map(ticks, & &1)
 
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(stream, name: "xauusd")
-        |> MarketSimulator.resample("m5")
-        |> MarketSimulator.stream()
+        %MarketSource{}
+        |> MarketSource.add_data(stream, name: "xauusd")
+        |> MarketSource.resample("m5")
+        |> MarketSource.stream()
         |> Enum.to_list()
 
       # Should have 5 events (one per tick)
@@ -275,43 +265,43 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "resample uses data feed name by default", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
         # No :data or :name
-        |> MarketSimulator.resample("m5")
+        |> MarketSource.resample("m5")
 
       # Should have generated data="XAUUSD" and name="XAUUSD_m5"
-      assert "XAUUSD" in simulator.data_streams
-      assert "XAUUSD_m5" in simulator.data_streams
+      assert "XAUUSD" in market.data_streams
+      assert "XAUUSD_m5" in market.data_streams
     end
 
     test "resample generates output name as data_timeframe", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
-        |> MarketSimulator.resample("h1")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
+        |> MarketSource.resample("h1")
 
-      assert "XAUUSD_h1" in simulator.data_streams
+      assert "XAUUSD_h1" in market.data_streams
     end
 
     test "raises when data stream not found", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "ticks")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "ticks")
 
       assert_raise ArgumentError, ~r/Data stream "unknown" not found/, fn ->
-        MarketSimulator.resample(simulator, "m5", data: "unknown")
+        MarketSource.resample(market, "m5", data: "unknown")
       end
     end
 
     test "add_indicator validates data stream", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "ticks")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "ticks")
 
       assert_raise ArgumentError, ~r/Data stream "nonexistent" not found/, fn ->
-        MarketSimulator.add_indicator(simulator, SimpleIndicator,
+        MarketSource.add_indicator(market, SimpleIndicator,
           constant: 10.0,
           name: "output",
           data: "nonexistent"
@@ -320,53 +310,53 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "add_indicators_layer validates all data streams", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "ticks")
-        |> MarketSimulator.resample("m5", name: "ticks_m5")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "ticks")
+        |> MarketSource.resample("m5", name: "ticks_m5")
 
       assert_raise ArgumentError, ~r/Data stream "unknown" not found/, fn ->
-        MarketSimulator.add_indicators_layer(simulator, [
-          {SimpleIndicator, constant: 10.0, name: "out1", data: "ticks_m5"},
-          {SimpleIndicator, constant: 20.0, name: "out2", data: "unknown"}
+        MarketSource.add_indicators_layer(market, [
+          {SimpleIndicator, data: "ticks_m5", constant: 10.0, name: "out1"},
+          {SimpleIndicator, data: "unknown", constant: 20.0, name: "out2"}
         ])
       end
     end
 
     test "data_feeds tracks only initial sources", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
-        |> MarketSimulator.resample("m5")
-        |> MarketSimulator.resample("h1")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
+        |> MarketSource.resample("m5")
+        |> MarketSource.resample("h1")
 
       # data_feeds should have only one feed
-      assert length(simulator.data_feeds) == 1
+      assert length(market.data_feeds) == 1
     end
 
     test "data_streams tracks all data names", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
-        |> MarketSimulator.resample("m5")
-        |> MarketSimulator.resample("h1")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
+        |> MarketSource.resample("m5")
+        |> MarketSource.resample("h1")
 
       # data_streams should have feed + 2 resamples
-      assert "XAUUSD" in simulator.data_streams
-      assert "XAUUSD_m5" in simulator.data_streams
-      assert "XAUUSD_h1" in simulator.data_streams
-      assert length(simulator.data_streams) == 3
+      assert "XAUUSD" in market.data_streams
+      assert "XAUUSD_m5" in market.data_streams
+      assert "XAUUSD_h1" in market.data_streams
+      assert length(market.data_streams) == 3
     end
 
     test "full pipeline without explicit data names works", %{feed: feed} do
       events =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "XAUUSD")
         # data="XAUUSD", name="XAUUSD_m5" auto
-        |> MarketSimulator.resample("m5")
+        |> MarketSource.resample("m5")
         # data="XAUUSD", name="XAUUSD_h1" auto
-        |> MarketSimulator.resample("h1")
-        |> MarketSimulator.stream()
+        |> MarketSource.resample("h1")
+        |> MarketSource.stream()
         |> Enum.take(5)
 
       # All events should have the data streams
@@ -381,39 +371,39 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "add_indicator generates name from module when not provided", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
 
       # Should generate "simple_indicator" from module name
-      assert "simple_indicator" in simulator.data_streams
+      assert "simple_indicator" in market.data_streams
     end
 
     test "add_indicator with multiple same modules adds numeric suffix", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
-        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 20.0)
-        |> MarketSimulator.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 30.0)
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 10.0)
+        |> MarketSource.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 20.0)
+        |> MarketSource.add_indicator(SimpleIndicator, data: "xauusd_m5", constant: 30.0)
 
       # Should generate: "simple_indicator", "simple_indicator_1", "simple_indicator_2"
-      assert "simple_indicator" in simulator.data_streams
-      assert "simple_indicator_1" in simulator.data_streams
-      assert "simple_indicator_2" in simulator.data_streams
+      assert "simple_indicator" in market.data_streams
+      assert "simple_indicator_1" in market.data_streams
+      assert "simple_indicator_2" in market.data_streams
     end
 
     test "add_indicator raises when explicit name is already taken", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
 
       assert_raise ArgumentError, ~r/Data stream name "xauusd_m5" is already taken/, fn ->
-        MarketSimulator.add_indicator(simulator, SimpleIndicator,
+        MarketSource.add_indicator(market, SimpleIndicator,
           data: "xauusd_m5",
           name: "xauusd_m5",
           constant: 10.0
@@ -422,58 +412,58 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "add_indicators_layer generates names from modules when not provided", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicators_layer([
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicators_layer([
           {SimpleIndicator, data: "xauusd_m5", constant: 10.0},
           {SMAIndicator, input: "xauusd_m5", period: 3}
         ])
 
       # Should generate "simple_indicator" and "sma_indicator"
-      assert "simple_indicator" in simulator.data_streams
-      assert "sma_indicator" in simulator.data_streams
+      assert "simple_indicator" in market.data_streams
+      assert "sma_indicator" in market.data_streams
     end
 
     test "add_indicators_layer handles multiple same modules in single layer", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicators_layer([
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicators_layer([
           {SimpleIndicator, data: "xauusd_m5", constant: 10.0},
           {SimpleIndicator, data: "xauusd_m5", constant: 20.0},
           {SimpleIndicator, data: "xauusd_m5", constant: 30.0}
         ])
 
       # Should generate: "simple_indicator", "simple_indicator_1", "simple_indicator_2"
-      assert "simple_indicator" in simulator.data_streams
-      assert "simple_indicator_1" in simulator.data_streams
-      assert "simple_indicator_2" in simulator.data_streams
+      assert "simple_indicator" in market.data_streams
+      assert "simple_indicator_1" in market.data_streams
+      assert "simple_indicator_2" in market.data_streams
     end
 
     test "add_indicators_layer raises when explicit name is already taken", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
 
       assert_raise ArgumentError, ~r/Data stream name "xauusd_m5" is already taken/, fn ->
-        MarketSimulator.add_indicators_layer(simulator, [
+        MarketSource.add_indicators_layer(market, [
           {SimpleIndicator, data: "xauusd_m5", name: "xauusd_m5", constant: 10.0}
         ])
       end
     end
 
     test "add_indicators_layer raises when duplicate name in same layer", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
 
       assert_raise ArgumentError, ~r/Data stream name "duplicate" is already taken/, fn ->
-        MarketSimulator.add_indicators_layer(simulator, [
+        MarketSource.add_indicators_layer(market, [
           {SimpleIndicator, data: "xauusd_m5", name: "duplicate", constant: 10.0},
           {SMAIndicator, input: "xauusd_m5", name: "duplicate", period: 3}
         ])
@@ -481,20 +471,20 @@ defmodule TheoryCraft.MarketSimulatorTest do
     end
 
     test "mixed explicit and generated names in add_indicators_layer", %{feed: feed} do
-      simulator =
-        %MarketSimulator{}
-        |> MarketSimulator.add_data(MemoryDataFeed, from: feed, name: "xauusd")
-        |> MarketSimulator.resample("m5", name: "xauusd_m5")
-        |> MarketSimulator.add_indicators_layer([
+      market =
+        %MarketSource{}
+        |> MarketSource.add_data(MemoryDataFeed, from: feed, name: "xauusd")
+        |> MarketSource.resample("m5", name: "xauusd_m5")
+        |> MarketSource.add_indicators_layer([
           {SimpleIndicator, data: "xauusd_m5", name: "explicit_name", constant: 10.0},
           {SimpleIndicator, data: "xauusd_m5", constant: 20.0},
           {SMAIndicator, input: "xauusd_m5", period: 3}
         ])
 
       # Should have "explicit_name", "simple_indicator" (auto), "sma_indicator" (auto)
-      assert "explicit_name" in simulator.data_streams
-      assert "simple_indicator" in simulator.data_streams
-      assert "sma_indicator" in simulator.data_streams
+      assert "explicit_name" in market.data_streams
+      assert "simple_indicator" in market.data_streams
+      assert "sma_indicator" in market.data_streams
     end
   end
 
