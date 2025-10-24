@@ -256,7 +256,7 @@ Logger.configure(level: :info)
 |> MarketSimulator.add_data(input_file.stream, name: "data")
 |> MarketSimulator.resample("m5", name: "data_m5")
 |> MarketSimulator.add_indicators_layer([
-  TA.sma(data_m5[:close], 2),
+  TA.sma(data[:ask], 2),
   TA.ema(data_m5[:close], 3),
 ])
 |> MarketSimulator.stream()

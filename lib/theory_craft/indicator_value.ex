@@ -65,6 +65,7 @@ defmodule TheoryCraft.IndicatorValue do
   """
 
   alias __MODULE__
+  alias TheoryCraft.{Bar, Tick}
 
   defstruct [:value, :data_name]
 
@@ -96,18 +97,21 @@ defmodule TheoryCraft.IndicatorValue do
 
   ## Examples
 
-      value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
-      event_data = %{"eurusd_m5" => %Bar{time: ~U[2024-01-01 10:00:00Z]}}
+      iex> alias TheoryCraft.Bar
+      iex> value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
+      iex> event_data = %{"eurusd_m5" => %Bar{time: ~U[2024-01-01 10:00:00Z], close: 1.23}}
+      iex> IndicatorValue.bar_time(value, event_data)
+      ~U[2024-01-01 10:00:00Z]
 
-      IndicatorValue.bar_time(value, event_data)
-      # => ~U[2024-01-01 10:00:00Z]
+      iex> alias TheoryCraft.Bar
+      iex> value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
+      iex> event_data = %{"eurusd_m5" => %Bar{time: ~U[2024-01-01 10:00:00Z], close: 1.23}}
+      iex> IndicatorValue.bar_time(value, event_data, ~U[2024-01-01 00:00:00Z])
+      ~U[2024-01-01 10:00:00Z]
 
-      IndicatorValue.bar_time(value, event_data, ~U[2024-01-01 00:00:00Z])
-      # => ~U[2024-01-01 10:00:00Z]
-
-      # With missing data
-      IndicatorValue.bar_time(value, %{}, ~U[2024-01-01 00:00:00Z])
-      # => ~U[2024-01-01 00:00:00Z]
+      iex> value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
+      iex> IndicatorValue.bar_time(value, %{}, ~U[2024-01-01 00:00:00Z])
+      ~U[2024-01-01 00:00:00Z]
 
   """
   @spec bar_time(t(), map(), DateTime.t() | nil) :: DateTime.t() | nil
@@ -129,47 +133,61 @@ defmodule TheoryCraft.IndicatorValue do
 
   This function performs a lazy lookup by following the data_name reference
   to find the source data in the event_data map. If the source is another
-  IndicatorValue, it recursively follows the chain until it finds a Bar/Tick
-  with a new_bar? field.
+  IndicatorValue, it recursively follows the chain until it finds a Bar or Tick.
+
+  ## Behavior
+
+    - If source is a Bar with `new_bar?` field: returns the flag value
+    - If source is a Tick: returns `true` (each tick is a new bar)
+    - If source is another IndicatorValue: recursively follows the chain
+    - Otherwise: raises an error
 
   ## Parameters
 
     - `indicator_value` - The IndicatorValue struct
     - `event_data` - The MarketEvent data map
-    - `default` - Default value if new_bar? cannot be found (default: nil)
 
   ## Returns
 
-    - `boolean()` if the source has a new_bar? field
-    - `default` if the source cannot be found or has no new_bar?
+    - `boolean()` - The new_bar? flag value
+
+  ## Raises
+
+    - If `data_name` is not found in event_data
+    - If the source data is not a Bar, Tick, or IndicatorValue
 
   ## Examples
 
-      value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
-      event_data = %{"eurusd_m5" => %Bar{new_bar?: true}}
+      iex> alias TheoryCraft.Bar
+      iex> value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
+      iex> event_data = %{"eurusd_m5" => %Bar{close: 1.23, new_bar?: true}}
+      iex> IndicatorValue.new_bar?(value, event_data)
+      true
 
-      IndicatorValue.new_bar?(value, event_data)
-      # => true
-
-      IndicatorValue.new_bar?(value, event_data, false)
-      # => true
-
-      # With missing data
-      IndicatorValue.new_bar?(value, %{}, false)
-      # => false
+      iex> alias TheoryCraft.Tick
+      iex> value = %IndicatorValue{value: 1.23, data_name: "eurusd_ticks"}
+      iex> event_data = %{"eurusd_ticks" => %Tick{time: ~U[2024-01-01 10:00:00Z], ask: 1.23, bid: 1.22, ask_volume: 100.0, bid_volume: 100.0}}
+      iex> IndicatorValue.new_bar?(value, event_data)
+      true
 
   """
-  @spec new_bar?(t(), map(), boolean()) :: boolean()
-  def new_bar?(%IndicatorValue{data_name: data_name}, event_data, default \\ true) do
+  @spec new_bar?(t(), map()) :: boolean()
+  def new_bar?(%IndicatorValue{data_name: data_name}, event_data) do
     case event_data do
-      %{^data_name => %{new_bar?: flag}} when is_boolean(flag) ->
+      %{^data_name => %Bar{new_bar?: flag}} when is_boolean(flag) ->
         flag
 
+      %{^data_name => %Tick{}} ->
+        true
+
       %{^data_name => %IndicatorValue{} = ind} ->
-        new_bar?(ind, event_data, default)
+        new_bar?(ind, event_data)
+
+      %{^data_name => _value} ->
+        raise "IndicatorValue source #{inspect(data_name)} is not a Bar, Tick, or IndicatorValue"
 
       %{} ->
-        default
+        raise "IndicatorValue source #{inspect(data_name)} not found in event data"
     end
   end
 
@@ -178,47 +196,61 @@ defmodule TheoryCraft.IndicatorValue do
 
   This function performs a lazy lookup by following the data_name reference
   to find the source data in the event_data map. If the source is another
-  IndicatorValue, it recursively follows the chain until it finds a Bar/Tick
-  with a new_market? field.
+  IndicatorValue, it recursively follows the chain until it finds a Bar or Tick.
+
+  ## Behavior
+
+    - If source is a Bar with `new_market?` field: returns the flag value
+    - If source is a Tick: returns `false` (ticks don't have market boundaries)
+    - If source is another IndicatorValue: recursively follows the chain
+    - Otherwise: raises an error
 
   ## Parameters
 
     - `indicator_value` - The IndicatorValue struct
     - `event_data` - The MarketEvent data map
-    - `default` - Default value if new_market? cannot be found (default: nil)
 
   ## Returns
 
-    - `boolean()` if the source has a new_market? field
-    - `default` if the source cannot be found or has no new_market?
+    - `boolean()` - The new_market? flag value
+
+  ## Raises
+
+    - If `data_name` is not found in event_data
+    - If the source data is not a Bar, Tick, or IndicatorValue
 
   ## Examples
 
-      value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
-      event_data = %{"eurusd_m5" => %Bar{new_market?: false}}
+      iex> alias TheoryCraft.Bar
+      iex> value = %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}
+      iex> event_data = %{"eurusd_m5" => %Bar{close: 1.23, new_market?: false}}
+      iex> IndicatorValue.new_market?(value, event_data)
+      false
 
-      IndicatorValue.new_market?(value, event_data)
-      # => false
-
-      IndicatorValue.new_market?(value, event_data, true)
-      # => false
-
-      # With missing data
-      IndicatorValue.new_market?(value, %{}, true)
-      # => true
+      iex> alias TheoryCraft.Tick
+      iex> value = %IndicatorValue{value: 1.23, data_name: "eurusd_ticks"}
+      iex> event_data = %{"eurusd_ticks" => %Tick{time: ~U[2024-01-01 10:00:00Z], ask: 1.23, bid: 1.22, ask_volume: 100.0, bid_volume: 100.0}}
+      iex> IndicatorValue.new_market?(value, event_data)
+      false
 
   """
-  @spec new_market?(t(), map(), boolean()) :: boolean()
-  def new_market?(%IndicatorValue{data_name: data_name}, event_data, default \\ false) do
+  @spec new_market?(t(), map()) :: boolean()
+  def new_market?(%IndicatorValue{data_name: data_name}, event_data) do
     case event_data do
-      %{^data_name => %{new_market?: flag}} when is_boolean(flag) ->
+      %{^data_name => %Bar{new_market?: flag}} when is_boolean(flag) ->
         flag
 
+      %{^data_name => %Tick{}} ->
+        false
+
       %{^data_name => %IndicatorValue{} = ind} ->
-        new_market?(ind, event_data, default)
+        new_market?(ind, event_data)
+
+      %{^data_name => _value} ->
+        raise "IndicatorValue source #{inspect(data_name)} is not a Bar, Tick, or IndicatorValue"
 
       %{} ->
-        default
+        raise "IndicatorValue source #{inspect(data_name)} not found in event data"
     end
   end
 end

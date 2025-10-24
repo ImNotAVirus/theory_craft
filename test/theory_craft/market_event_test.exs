@@ -1,9 +1,11 @@
 defmodule TheoryCraft.MarketEventTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.{Bar, IndicatorValue, MarketEvent}
+  alias TheoryCraft.{Bar, IndicatorValue, MarketEvent, Tick}
 
   ## Tests
+
+  doctest TheoryCraft.MarketEvent
 
   describe "extract_value/3" do
     test "extracts close from Bar with MarketEvent" do
@@ -49,6 +51,19 @@ defmodule TheoryCraft.MarketEventTest do
       assert MarketEvent.new_bar?(event, "eurusd_m5") == true
     end
 
+    test "returns true for Tick (each tick is a new bar)" do
+      tick = %Tick{
+        time: ~U[2024-01-01 10:00:00Z],
+        ask: 1.23,
+        bid: 1.22,
+        ask_volume: 100.0,
+        bid_volume: 100.0
+      }
+
+      event = %MarketEvent{data: %{"eurusd_ticks" => tick}}
+      assert MarketEvent.new_bar?(event, "eurusd_ticks") == true
+    end
+
     test "returns true for IndicatorValue with MarketEvent (lazy lookup)" do
       event = build_event()
       assert MarketEvent.new_bar?(event, "sma20") == true
@@ -80,10 +95,10 @@ defmodule TheoryCraft.MarketEventTest do
       end
     end
 
-    test "raises when data has no new_bar? field with MarketEvent" do
+    test "raises when data is not Bar, Tick, or IndicatorValue" do
       event = %MarketEvent{data: %{"raw_value" => 42.0}}
 
-      assert_raise RuntimeError, ~r/data "raw_value" is not a bar/, fn ->
+      assert_raise RuntimeError, ~r/data "raw_value" is not a Bar, Tick, or IndicatorValue/, fn ->
         MarketEvent.new_bar?(event, "raw_value")
       end
     end
@@ -93,6 +108,19 @@ defmodule TheoryCraft.MarketEventTest do
     test "extracts new_market? from Bar with MarketEvent" do
       event = build_event()
       assert MarketEvent.new_market?(event, "eurusd_m5") == false
+    end
+
+    test "returns false for Tick (ticks don't have market boundaries)" do
+      tick = %Tick{
+        time: ~U[2024-01-01 10:00:00Z],
+        ask: 1.23,
+        bid: 1.22,
+        ask_volume: 100.0,
+        bid_volume: 100.0
+      }
+
+      event = %MarketEvent{data: %{"eurusd_ticks" => tick}}
+      assert MarketEvent.new_market?(event, "eurusd_ticks") == false
     end
 
     test "returns false for IndicatorValue with MarketEvent (lazy lookup)" do
@@ -126,10 +154,10 @@ defmodule TheoryCraft.MarketEventTest do
       end
     end
 
-    test "raises when data has no new_market? field with MarketEvent" do
+    test "raises when data is not Bar, Tick, or IndicatorValue" do
       event = %MarketEvent{data: %{"raw_value" => 42.0}}
 
-      assert_raise RuntimeError, ~r/data "raw_value" is not a bar/, fn ->
+      assert_raise RuntimeError, ~r/data "raw_value" is not a Bar, Tick, or IndicatorValue/, fn ->
         MarketEvent.new_market?(event, "raw_value")
       end
     end

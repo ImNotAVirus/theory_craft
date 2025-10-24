@@ -46,7 +46,7 @@ defmodule TheoryCraft.MarketEvent do
   """
 
   alias __MODULE__
-  alias TheoryCraft.{Bar, IndicatorValue}
+  alias TheoryCraft.{Bar, IndicatorValue, Tick}
 
   defstruct [:time, :source, data: %{}]
 
@@ -83,17 +83,19 @@ defmodule TheoryCraft.MarketEvent do
 
   ## Examples
 
-      event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, high: 1.25}}}
-      MarketEvent.extract_value(event, "eurusd_m5", :close)
-      # => 1.23
+      iex> alias TheoryCraft.{Bar, IndicatorValue}
+      iex> event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, high: 1.25}}}
+      iex> MarketEvent.extract_value(event, "eurusd_m5", :close)
+      1.23
 
-      event = %MarketEvent{data: %{"sma20" => %IndicatorValue{value: 1.25, data_name: "eurusd_m5"}}}
-      MarketEvent.extract_value(event, "sma20", nil)
-      # => 1.25
+      iex> alias TheoryCraft.IndicatorValue
+      iex> event = %MarketEvent{data: %{"sma20" => %IndicatorValue{value: 1.25, data_name: "eurusd_m5"}}}
+      iex> MarketEvent.extract_value(event, "sma20", nil)
+      1.25
 
-      event = %MarketEvent{data: %{"raw_value" => 42.0}}
-      MarketEvent.extract_value(event, "raw_value", nil)
-      # => 42.0
+      iex> event = %MarketEvent{data: %{"raw_value" => 42.0}}
+      iex> MarketEvent.extract_value(event, "raw_value", nil)
+      42.0
 
   """
   @spec extract_value(t(), String.t(), atom() | nil) :: any()
@@ -131,38 +133,42 @@ defmodule TheoryCraft.MarketEvent do
   ## Behavior
 
     - If data is a Bar with `new_bar?` field: returns the flag value
-    - If data is an IndicatorValue: uses lazy lookup to find the source bar
+    - If data is a Tick: returns `true` (each tick is a new bar)
+    - If data is an IndicatorValue: uses lazy lookup to find the source bar/tick
     - Otherwise: raises an error
 
   ## Raises
 
     - If `data_name` is not found in event data
-    - If data doesn't have a `new_bar?` field and is not an IndicatorValue
+    - If data is not a Bar, Tick, or IndicatorValue
 
   ## Examples
 
-      event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, new_bar?: false}}}
-      MarketEvent.new_bar?(event, "eurusd_m5")
-      # => false
+      iex> alias TheoryCraft.Bar
+      iex> event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, new_bar?: false}}}
+      iex> MarketEvent.new_bar?(event, "eurusd_m5")
+      false
 
-      event = %MarketEvent{data: %{"sma20" => %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}}}
-      MarketEvent.new_bar?(event, "sma20")
-      # => true (lazy lookup through IndicatorValue)
+      iex> alias TheoryCraft.Tick
+      iex> event = %MarketEvent{data: %{"eurusd_ticks" => %Tick{time: ~U[2024-01-01 10:00:00Z], ask: 1.23, bid: 1.22, ask_volume: 100.0, bid_volume: 100.0}}}
+      iex> MarketEvent.new_bar?(event, "eurusd_ticks")
+      true
 
   """
-  @spec new_bar?(t(), String.t(), boolean()) :: boolean()
-  def new_bar?(%MarketEvent{data: event_data}, data_name, default \\ true) do
+  @spec new_bar?(t(), String.t()) :: boolean()
+  def new_bar?(%MarketEvent{data: event_data}, data_name) do
     case event_data do
       %{^data_name => %Bar{new_bar?: new_bar?}} when is_boolean(new_bar?) ->
         new_bar?
 
+      %{^data_name => %Tick{}} ->
+        true
+
       %{^data_name => %IndicatorValue{} = ind} ->
-        IndicatorValue.new_bar?(ind, event_data, default)
+        IndicatorValue.new_bar?(ind, event_data)
 
       %{^data_name => _value} ->
-        raise "data #{inspect(data_name)} is not a bar (no new_bar? field). " <>
-                "When calculating an indicator on another indicator's output, " <>
-                "use an IndicatorValue wrapper which treats each update as a new bar (new_bar? = true)."
+        raise "data #{inspect(data_name)} is not a Bar, Tick, or IndicatorValue"
 
       %{} ->
         raise "data_name #{inspect(data_name)} not found in event"
@@ -184,38 +190,42 @@ defmodule TheoryCraft.MarketEvent do
   ## Behavior
 
     - If data is a Bar with `new_market?` field: returns the flag value
-    - If data is an IndicatorValue: uses lazy lookup to find the source bar
+    - If data is a Tick: returns `false` (ticks don't have market boundaries)
+    - If data is an IndicatorValue: uses lazy lookup to find the source bar/tick
     - Otherwise: raises an error
 
   ## Raises
 
     - If `data_name` is not found in event data
-    - If data doesn't have a `new_market?` field and is not an IndicatorValue
+    - If data is not a Bar, Tick, or IndicatorValue
 
   ## Examples
 
-      event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, new_market?: true}}}
-      MarketEvent.new_market?(event, "eurusd_m5")
-      # => true
+      iex> alias TheoryCraft.Bar
+      iex> event = %MarketEvent{data: %{"eurusd_m5" => %Bar{close: 1.23, new_market?: true}}}
+      iex> MarketEvent.new_market?(event, "eurusd_m5")
+      true
 
-      event = %MarketEvent{data: %{"sma20" => %IndicatorValue{value: 45.0, data_name: "eurusd_m5"}}}
-      MarketEvent.new_market?(event, "sma20")
-      # => false (lazy lookup through IndicatorValue)
+      iex> alias TheoryCraft.Tick
+      iex> event = %MarketEvent{data: %{"eurusd_ticks" => %Tick{time: ~U[2024-01-01 10:00:00Z], ask: 1.23, bid: 1.22, ask_volume: 100.0, bid_volume: 100.0}}}
+      iex> MarketEvent.new_market?(event, "eurusd_ticks")
+      false
 
   """
-  @spec new_market?(t(), String.t(), boolean()) :: boolean()
-  def new_market?(%MarketEvent{data: event_data}, data_name, default \\ false) do
+  @spec new_market?(t(), String.t()) :: boolean()
+  def new_market?(%MarketEvent{data: event_data}, data_name) do
     case event_data do
       %{^data_name => %Bar{new_market?: new_market?}} when is_boolean(new_market?) ->
         new_market?
 
+      %{^data_name => %Tick{}} ->
+        false
+
       %{^data_name => %IndicatorValue{} = ind} ->
-        IndicatorValue.new_market?(ind, event_data, default)
+        IndicatorValue.new_market?(ind, event_data)
 
       %{^data_name => _value} ->
-        raise "data #{inspect(data_name)} is not a bar (no new_market? field). " <>
-                "When calculating an indicator on another indicator's output, " <>
-                "use an IndicatorValue wrapper which doesn't track market boundaries (new_market? = false)."
+        raise "data #{inspect(data_name)} is not a Bar, Tick, or IndicatorValue"
 
       %{} ->
         raise "data_name #{inspect(data_name)} not found in event"
