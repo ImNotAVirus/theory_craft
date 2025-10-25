@@ -130,7 +130,7 @@ TheoryCraft.Test.test()
 ## KinoTheoryCraft
 
 ```elixir
-alias TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed
+alias TheoryCraft.MarketSource.TicksCSVDataFeed
 
 filename = "D:/Documents/Dev/trading/python/data/XAUUSD_Ticks_18.08.2025-18.08.2025.csv"
 
