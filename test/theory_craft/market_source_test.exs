@@ -2,11 +2,11 @@ defmodule TheoryCraft.MarketSourceTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.MarketSource
-  alias TheoryCraft.MarketEvent
-  alias TheoryCraft.Tick
-  alias TheoryCraft.Bar
-  alias TheoryCraft.DataFeeds.MemoryDataFeed
-  alias TheoryCraft.IndicatorValue
+  alias TheoryCraft.MarketSource.MarketEvent
+  alias TheoryCraft.MarketSource.Tick
+  alias TheoryCraft.MarketSource.Bar
+  alias TheoryCraft.MarketSource.DataFeeds.MemoryDataFeed
+  alias TheoryCraft.MarketSource.IndicatorValue
   alias TheoryCraft.TestIndicators.SimpleIndicator
   alias TheoryCraft.TestIndicators.SMAIndicator
 

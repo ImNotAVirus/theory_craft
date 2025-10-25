@@ -2,15 +2,15 @@ defmodule TheoryCraft.TestIndicators do
   @moduledoc false
   # Test indicator modules for testing IndicatorProcessor behavior
 
-  alias TheoryCraft.IndicatorValue
+  alias TheoryCraft.MarketSource.IndicatorValue
 
   defmodule SimpleIndicator do
     @moduledoc false
     # A simple test indicator that returns a constant value
 
-    @behaviour TheoryCraft.Indicator
+    @behaviour TheoryCraft.MarketSource.Indicator
 
-    alias TheoryCraft.IndicatorValue
+    alias TheoryCraft.MarketSource.IndicatorValue
 
     @impl true
     def init(opts) do
@@ -36,9 +36,9 @@ defmodule TheoryCraft.TestIndicators do
     @moduledoc false
     # A test SMA indicator that maintains a simple moving average
 
-    @behaviour TheoryCraft.Indicator
+    @behaviour TheoryCraft.MarketSource.Indicator
 
-    alias TheoryCraft.IndicatorValue
+    alias TheoryCraft.MarketSource.{Bar, IndicatorValue}
 
     @impl true
     def init(opts) do
@@ -58,7 +58,7 @@ defmodule TheoryCraft.TestIndicators do
       # Extract close price from bar
       close =
         case value do
-          %TheoryCraft.Bar{close: close} -> close
+          %Bar{close: close} -> close
           %{close: close} -> close
           v when is_number(v) -> v
           _ -> 0.0
@@ -91,7 +91,7 @@ defmodule TheoryCraft.TestIndicators do
     @moduledoc false
     # An indicator that fails during init for error testing
 
-    @behaviour TheoryCraft.Indicator
+    @behaviour TheoryCraft.MarketSource.Indicator
 
     @impl true
     def init(_opts) do

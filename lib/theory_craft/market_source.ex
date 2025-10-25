@@ -75,17 +75,17 @@ defmodule TheoryCraft.MarketSource do
   """
 
   alias __MODULE__
-  alias TheoryCraft.MarketEvent
+  alias TheoryCraft.MarketSource.MarketEvent
+  alias TheoryCraft.MarketSource.Processor
+  alias TheoryCraft.MarketSource.Indicator
+  alias TheoryCraft.MarketSource.Processors.TickToBarProcessor
+  alias TheoryCraft.MarketSource.Processors.IndicatorProcessor
+  alias TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed
+  alias TheoryCraft.MarketSource.Stages.DataFeedStage
+  alias TheoryCraft.MarketSource.Stages.ProcessorStage
+  alias TheoryCraft.MarketSource.Stages.BroadcastStage
+  alias TheoryCraft.MarketSource.Stages.AggregatorStage
   alias TheoryCraft.TimeFrame
-  alias TheoryCraft.Processor
-  alias TheoryCraft.Indicator
-  alias TheoryCraft.Processors.TickToBarProcessor
-  alias TheoryCraft.Processors.IndicatorProcessor
-  alias TheoryCraft.DataFeeds.TicksCSVDataFeed
-  alias TheoryCraft.Stages.DataFeedStage
-  alias TheoryCraft.Stages.ProcessorStage
-  alias TheoryCraft.Stages.BroadcastStage
-  alias TheoryCraft.Stages.AggregatorStage
   alias TheoryCraft.Utils
 
   defstruct [
