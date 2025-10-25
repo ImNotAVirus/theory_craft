@@ -48,8 +48,7 @@ defmodule TheoryCraft.MarketSource.AggregatorStage do
 
   require Logger
 
-  alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.StageHelpers
+  alias TheoryCraft.MarketSource.{MarketEvent, StageHelpers}
 
   @typedoc """
   Options for starting an AggregatorStage.

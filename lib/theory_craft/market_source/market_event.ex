@@ -46,8 +46,7 @@ defmodule TheoryCraft.MarketSource.MarketEvent do
   """
 
   alias __MODULE__
-  alias TheoryCraft.MarketSource.{Bar, Tick}
-  alias TheoryCraft.MarketSource.IndicatorValue
+  alias TheoryCraft.MarketSource.{Bar, IndicatorValue, Tick}
 
   defstruct [:time, :source, data: %{}]
 

@@ -59,10 +59,8 @@ defmodule TheoryCraft.MarketSource.DataFeedStage do
 
   require Logger
 
-  alias TheoryCraft.MarketSource.DataFeed
-  alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.StageHelpers
   alias TheoryCraft.Utils
+  alias TheoryCraft.MarketSource.{DataFeed, MarketEvent, StageHelpers}
 
   @typedoc """
   Options for starting a DataFeedStage.

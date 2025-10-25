@@ -51,9 +51,8 @@ defmodule TheoryCraft.MarketSource.ProcessorStage do
 
   require Logger
 
-  alias TheoryCraft.MarketSource.Processor
-  alias TheoryCraft.MarketSource.StageHelpers
   alias TheoryCraft.Utils
+  alias TheoryCraft.MarketSource.{Processor, StageHelpers}
 
   @typedoc """
   Options for starting a ProcessorStage.

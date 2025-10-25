@@ -9,8 +9,7 @@ defmodule TheoryCraft.MarketSource.MemoryDataFeed do
   use TheoryCraft.MarketSource.DataFeed
 
   alias __MODULE__
-  alias TheoryCraft.MarketSource.{Bar, Tick}
-  alias TheoryCraft.MarketSource.DataFeed
+  alias TheoryCraft.MarketSource.{Bar, DataFeed, Tick}
 
   defstruct [:table, :precision]
 

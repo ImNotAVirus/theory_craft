@@ -75,18 +75,20 @@ defmodule TheoryCraft.MarketSource do
   """
 
   alias __MODULE__
-  alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.Processor
-  alias TheoryCraft.MarketSource.Indicator
-  alias TheoryCraft.MarketSource.TickToBarProcessor
-  alias TheoryCraft.MarketSource.IndicatorProcessor
-  alias TheoryCraft.MarketSource.TicksCSVDataFeed
-  alias TheoryCraft.MarketSource.DataFeedStage
-  alias TheoryCraft.MarketSource.ProcessorStage
-  alias TheoryCraft.MarketSource.BroadcastStage
-  alias TheoryCraft.MarketSource.AggregatorStage
-  alias TheoryCraft.TimeFrame
-  alias TheoryCraft.Utils
+  alias TheoryCraft.{TimeFrame, Utils}
+
+  alias TheoryCraft.MarketSource.{
+    AggregatorStage,
+    BroadcastStage,
+    DataFeedStage,
+    Indicator,
+    IndicatorProcessor,
+    MarketEvent,
+    Processor,
+    ProcessorStage,
+    TickToBarProcessor,
+    TicksCSVDataFeed
+  }
 
   defstruct [
     # Data feeds as keyword list: [name: {module, opts}]

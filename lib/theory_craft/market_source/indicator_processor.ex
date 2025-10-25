@@ -40,8 +40,8 @@ defmodule TheoryCraft.MarketSource.IndicatorProcessor do
   """
 
   alias __MODULE__
-  alias TheoryCraft.MarketSource.MarketEvent
   alias TheoryCraft.Utils
+  alias TheoryCraft.MarketSource.MarketEvent
 
   @behaviour TheoryCraft.MarketSource.Processor
 
