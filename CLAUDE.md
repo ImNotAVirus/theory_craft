@@ -60,7 +60,7 @@ The system uses GenStage for backpressure-aware streaming:
   - `AggregatorStage`: Synchronize and merge parallel outputs
   - `StageHelpers`: Shared utilities (option extraction, producer/consumer tracking, Flow termination pattern)
 
-#### MarketSimulator
+#### MarketSource
 
 Fluent API for building GenStage pipelines dynamically:
 - Supports multiple data feeds
@@ -106,7 +106,7 @@ All stages support:
 
        import TheoryCraft.TimeFrame
 
-       alias TheoryCraft.MarketSimulator
+       alias TheoryCraft.MarketSource
        alias TheoryCraft.Processor
 
        ## Module attributes
@@ -599,19 +599,45 @@ All stages support:
      end
      ```
 
-### Code Formatting
+### Code Formatting and Quality Checks
 
-**Always run `mix format` on modified Elixir files when finished**
-- After completing all modifications, always format the changed `.ex` and `.exs` files
-- `mix format` only works on Elixir source files (`.ex` and `.exs`)
-- Do NOT run `mix format` on other files like `.md`, `.txt`, etc.
-- This ensures consistent code style across the project
-- Example workflow:
+**Always run `mix ci` when finished with your changes**
+
+After completing all modifications, you must run the CI pipeline to ensure code quality:
+
+```bash
+mix ci
+```
+
+This command runs three checks in sequence:
+1. **`mix format`** - Formats all Elixir source files (`.ex` and `.exs`)
+2. **`mix credo`** - Runs static code analysis to detect issues and suggest improvements
+3. **`mix test`** - Runs the entire test suite to ensure nothing is broken
+
+#### Fixing Credo Issues
+
+If `mix credo` reports issues, you must fix ALL of them before considering your work complete:
+
+- Read each Credo warning/error carefully
+- If you don't understand a specific issue, use `mix credo explain` to get more details:
   ```bash
-  # After modifying Elixir files
-  mix format lib/theory_craft/processors/tick_to_bar_processor.ex
-  mix format test/theory_craft/processors/tick_to_bar_processor_test.exs
-
-  # Or format all Elixir files in the project
-  mix format
+  # Example: explain issue at specific location
+  mix credo explain lib/theory_craft/utils/parsers.ex:32:28
   ```
+- Fix the reported issues according to Credo's recommendations
+- Re-run `mix ci` to verify all issues are resolved
+
+#### Manual Formatting (Optional)
+
+If you need to format specific files during development:
+
+```bash
+# Format specific files
+mix format lib/theory_craft/processors/tick_to_bar_processor.ex
+mix format test/theory_craft/processors/tick_to_bar_processor_test.exs
+
+# Or format all Elixir files in the project
+mix format
+```
+
+**Note:** `mix format` only works on Elixir source files (`.ex` and `.exs`). Do NOT run it on other files like `.md`, `.txt`, etc.
