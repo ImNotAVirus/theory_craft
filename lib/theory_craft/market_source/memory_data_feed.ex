@@ -56,29 +56,24 @@ defmodule TheoryCraft.MarketSource.MemoryDataFeed do
 
   @impl true
   def stream(opts) do
-    with {:ok, %MemoryDataFeed{} = df} <- Keyword.fetch(opts, :from) do
-      %MemoryDataFeed{table: table, precision: precision} = df
+    case Keyword.fetch(opts, :from) do
+      {:ok, %MemoryDataFeed{} = df} ->
+        %MemoryDataFeed{table: table, precision: precision} = df
 
-      stream =
-        Stream.resource(
-          fn -> :ets.first(table) end,
-          fn
-            :"$end_of_table" ->
-              {:halt, :"$end_of_table"}
+        stream =
+          Stream.resource(
+            fn -> :ets.first(table) end,
+            fn state -> lookup_next(state, table, precision) end,
+            fn _ -> :ok end
+          )
 
-            key ->
-              case :ets.lookup(table, key) do
-                [data] -> {[load(data, precision)], :ets.next(table, key)}
-                [] -> {:halt, :"$end_of_table"}
-              end
-          end,
-          fn _ -> :ok end
-        )
+        {:ok, stream}
 
-      {:ok, stream}
-    else
-      :error -> {:error, ":from option is required"}
-      {:ok, _} -> {:error, ":from option must be a MemoryDataFeed"}
+      :error ->
+        {:error, ":from option is required"}
+
+      {:ok, _} ->
+        {:error, ":from option must be a MemoryDataFeed"}
     end
   end
 
@@ -160,5 +155,14 @@ defmodule TheoryCraft.MarketSource.MemoryDataFeed do
       close: close,
       volume: volume
     }
+  end
+
+  defp lookup_next(:"$end_of_table", _table, _precision), do: {:halt, :"$end_of_table"}
+
+  defp lookup_next(key, table, precision) do
+    case :ets.lookup(table, key) do
+      [data] -> {[load(data, precision)], :ets.next(table, key)}
+      [] -> {:halt, :"$end_of_table"}
+    end
   end
 end

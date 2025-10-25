@@ -86,8 +86,8 @@ defmodule TheoryCraft.MarketSource do
     MarketEvent,
     Processor,
     ProcessorStage,
-    TickToBarProcessor,
-    TicksCSVDataFeed
+    TicksCSVDataFeed,
+    TickToBarProcessor
   }
 
   defstruct [

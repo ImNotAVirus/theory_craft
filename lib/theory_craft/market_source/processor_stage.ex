@@ -51,8 +51,8 @@ defmodule TheoryCraft.MarketSource.ProcessorStage do
 
   require Logger
 
-  alias TheoryCraft.Utils
   alias TheoryCraft.MarketSource.{Processor, StageHelpers}
+  alias TheoryCraft.Utils
 
   @typedoc """
   Options for starting a ProcessorStage.
@@ -115,44 +115,42 @@ defmodule TheoryCraft.MarketSource.ProcessorStage do
 
   @impl true
   def init({processor_module, processor_opts, stage_opts}) do
-    try do
-      case processor_module.init(processor_opts) do
-        {:ok, processor_state} ->
-          Logger.debug("""
-          ProcessorStage starting with processor_module=#{inspect(processor_module)}
-          """)
-
-          state =
-            StageHelpers.init_tracking_state(%{
-              processor_module: processor_module,
-              processor_state: processor_state
-            })
-
-          subscribe_to = Keyword.fetch!(stage_opts, :subscribe_to)
-
-          subscription_opts =
-            stage_opts
-            |> StageHelpers.extract_subscription_opts()
-            |> Keyword.merge(subscribe_to: subscribe_to)
-
-          {:producer_consumer, state, subscription_opts}
-
-        error ->
-          Logger.error("""
-          ProcessorStage: Failed to initialize processor #{inspect(processor_module)}: #{inspect(error)}
-          """)
-
-          {:stop, {:processor_init_error, error}}
-      end
-    rescue
-      exception ->
-        Logger.error("""
-        ProcessorStage: Processor #{inspect(processor_module)} raised exception during init: #{inspect(exception)}
-        #{Exception.format_stacktrace(__STACKTRACE__)}
+    case processor_module.init(processor_opts) do
+      {:ok, processor_state} ->
+        Logger.debug("""
+        ProcessorStage starting with processor_module=#{inspect(processor_module)}
         """)
 
-        {:stop, {:processor_init_error, exception}}
+        state =
+          StageHelpers.init_tracking_state(%{
+            processor_module: processor_module,
+            processor_state: processor_state
+          })
+
+        subscribe_to = Keyword.fetch!(stage_opts, :subscribe_to)
+
+        subscription_opts =
+          stage_opts
+          |> StageHelpers.extract_subscription_opts()
+          |> Keyword.merge(subscribe_to: subscribe_to)
+
+        {:producer_consumer, state, subscription_opts}
+
+      error ->
+        Logger.error("""
+        ProcessorStage: Failed to initialize processor #{inspect(processor_module)}: #{inspect(error)}
+        """)
+
+        {:stop, {:processor_init_error, error}}
     end
+  rescue
+    exception ->
+      Logger.error("""
+      ProcessorStage: Processor #{inspect(processor_module)} raised exception during init: #{inspect(exception)}
+      #{Exception.format_stacktrace(__STACKTRACE__)}
+      """)
+
+      {:stop, {:processor_init_error, exception}}
   end
 
   @impl true

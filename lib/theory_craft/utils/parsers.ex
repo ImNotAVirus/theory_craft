@@ -29,7 +29,7 @@ defmodule TheoryCraft.Utils.Parsers do
 
   ## Private functions
 
-  defp join_dukascopy_time(rest = "", args, context, _position, _offset) do
+  defp join_dukascopy_time("" = rest, args, context, _position, _offset) do
     [timezone_offset, "GMT", microseconds, secs, minutes, hour, year, month, day] = args
 
     date = Date.new!(year, month, day)

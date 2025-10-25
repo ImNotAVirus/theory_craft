@@ -1,8 +1,7 @@
 defmodule TheoryCraft.MarketSource.MemoryDataFeedTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSource.MemoryDataFeed
-  alias TheoryCraft.MarketSource.{Bar, Tick}
+  alias TheoryCraft.MarketSource.{Bar, MemoryDataFeed, Tick}
 
   ## Setup
 

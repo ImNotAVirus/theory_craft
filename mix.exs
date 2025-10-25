@@ -8,6 +8,7 @@ defmodule TheoryCraft.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      preferred_cli_env: [ci: :test],
       deps: deps(),
       aliases: aliases(),
       elixirc_options: [warnings_as_errors: true]
@@ -25,7 +26,8 @@ defmodule TheoryCraft.MixProject do
   def aliases() do
     [
       tidewave:
-        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'"
+        "run --no-halt -e 'Agent.start(fn -> Bandit.start_link(plug: Tidewave, port: 4000) end)'",
+      ci: ["format", "credo", "test"]
     ]
   end
 
@@ -42,6 +44,7 @@ defmodule TheoryCraft.MixProject do
       ## Dev
       {:tidewave, "~> 0.5", only: :dev},
       {:bandit, "~> 1.0", only: :dev},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
 
       ## Tests
       {:tzdata, "~> 1.1", only: :test}

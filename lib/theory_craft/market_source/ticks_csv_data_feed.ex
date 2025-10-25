@@ -9,32 +9,34 @@ defmodule TheoryCraft.MarketSource.TicksCSVDataFeed do
   use TheoryCraft.MarketSource.DataFeed
 
   alias NimbleCSV.RFC4180, as: CSV
-  alias TheoryCraft.Utils
   alias TheoryCraft.MarketSource.Tick
+  alias TheoryCraft.Utils
 
   ## DataFeed behaviour
 
   @impl true
   def stream(opts) do
-    with {:ok, file} <- Keyword.fetch(opts, :file) do
-      skip_headers = Keyword.get(opts, :skip_headers, true)
-      read_ahead = Keyword.get(opts, :read_ahead, 500_000)
+    case Keyword.fetch(opts, :file) do
+      {:ok, file} ->
+        skip_headers = Keyword.get(opts, :skip_headers, true)
+        read_ahead = Keyword.get(opts, :read_ahead, 500_000)
 
-      stream =
-        file
-        |> File.stream!(read_ahead: read_ahead)
-        |> CSV.parse_stream(skip_headers: skip_headers)
-        |> transform_csv_fun(skip_headers, opts)
+        stream =
+          file
+          |> File.stream!(read_ahead: read_ahead)
+          |> CSV.parse_stream(skip_headers: skip_headers)
+          |> transform_csv_fun(skip_headers, opts)
 
-      {:ok, stream}
-    else
-      :error -> {:error, ":file option is required"}
+        {:ok, stream}
+
+      :error ->
+        {:error, ":file option is required"}
     end
   end
 
   ## Private functions
 
-  defp transform_csv_fun(stream, _skip_headers = false, opts) do
+  defp transform_csv_fun(stream, false = _skip_headers, opts) do
     time_format = Keyword.get(opts, :time_format, {:datetime, :millisecond, "Etc/UTC"})
     nil_value = Keyword.get(opts, :nil_value, "NaN")
 

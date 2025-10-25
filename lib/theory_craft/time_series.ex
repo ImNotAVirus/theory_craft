@@ -605,11 +605,7 @@ defmodule TheoryCraft.TimeSeries do
 
         case function.(current_value) do
           {get_value, new_value} ->
-            {_, updated_data} =
-              Access.get_and_update(data, index, fn _old -> {nil, new_value} end)
-
-            new_series = %TimeSeries{series | data: updated_data}
-            {get_value, new_series}
+            update_series_value(series, data, index, get_value, new_value)
 
           :pop ->
             raise ArgumentError, "cannot pop from a TimeSeries"
@@ -663,6 +659,13 @@ defmodule TheoryCraft.TimeSeries do
       end
 
     %TimeSeries{data: new_data, dt: final_dt}
+  end
+
+  # Updates a value in the TimeSeries at the given index.
+  defp update_series_value(series, data, index, get_value, new_value) do
+    {_, updated_data} = Access.get_and_update(data, index, fn _old -> {nil, new_value} end)
+    new_series = %TimeSeries{series | data: updated_data}
+    {get_value, new_series}
   end
 end
 

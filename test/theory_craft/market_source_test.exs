@@ -2,13 +2,16 @@ defmodule TheoryCraft.MarketSourceTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.MarketSource
-  alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.Tick
-  alias TheoryCraft.MarketSource.Bar
-  alias TheoryCraft.MarketSource.MemoryDataFeed
-  alias TheoryCraft.MarketSource.IndicatorValue
-  alias TheoryCraft.TestIndicators.SimpleIndicator
-  alias TheoryCraft.TestIndicators.SMAIndicator
+
+  alias TheoryCraft.MarketSource.{
+    Bar,
+    IndicatorValue,
+    MarketEvent,
+    MemoryDataFeed,
+    Tick
+  }
+
+  alias TheoryCraft.TestIndicators.{SimpleIndicator, SMAIndicator}
 
   @moduletag :capture_log
 

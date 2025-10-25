@@ -60,8 +60,8 @@ defmodule TheoryCraft.MarketSource.TickToBarProcessor do
   """
 
   alias __MODULE__
-  alias TheoryCraft.{TimeFrame, Utils}
   alias TheoryCraft.MarketSource.{Bar, MarketEvent, Tick}
+  alias TheoryCraft.{TimeFrame, Utils}
 
   @behaviour TheoryCraft.MarketSource.Processor
 

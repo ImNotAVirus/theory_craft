@@ -1446,7 +1446,7 @@ defmodule TheoryCraft.MarketSource.TickToBarProcessorTest do
 
       assert state.name == "btcusd_h1"
 
-      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 50000.0, ask: 50010.0)
+      tick = build_tick(~U[2024-01-01 10:23:45Z], bid: 50_000.0, ask: 50_010.0)
       event = %MarketEvent{data: %{"btcusd" => tick}}
 
       assert {:ok, new_event, _new_state} = TickToBarProcessor.next(event, state)

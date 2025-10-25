@@ -59,13 +59,11 @@ defmodule TheoryCraft.MarketSource.StageHelpers do
         # Producer cancelled
         new_producers = Map.delete(producers, ref)
 
-        if stage_name do
-          Logger.debug("#{stage_name}: Producer cancelled, #{map_size(new_producers)} remaining")
-        end
+        log_producer_cancelled(stage_name, map_size(new_producers))
 
         if map_size(new_producers) == 0 do
           # Last producer cancelled, stop this stage
-          if stage_name, do: Logger.debug("#{stage_name}: Last producer cancelled, stopping")
+          log_last_producer_cancelled(stage_name)
           GenStage.async_info(self(), :stop)
         end
 
@@ -133,5 +131,19 @@ defmodule TheoryCraft.MarketSource.StageHelpers do
   """
   def extract_subscription_opts(opts) do
     Keyword.take(opts, [:min_demand, :max_demand, :buffer_size, :buffer_keep])
+  end
+
+  ## Private helper functions
+
+  defp log_producer_cancelled(nil, _remaining), do: :ok
+
+  defp log_producer_cancelled(stage_name, remaining) do
+    Logger.debug("#{stage_name}: Producer cancelled, #{remaining} remaining")
+  end
+
+  defp log_last_producer_cancelled(nil), do: :ok
+
+  defp log_last_producer_cancelled(stage_name) do
+    Logger.debug("#{stage_name}: Last producer cancelled, stopping")
   end
 end

@@ -1,9 +1,14 @@
 defmodule TheoryCraft.MarketSource.BroadcastStageTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSource.{BroadcastStage, DataFeedStage}
-  alias TheoryCraft.MarketSource.MemoryDataFeed
-  alias TheoryCraft.MarketSource.{MarketEvent, Tick}
+  alias TheoryCraft.MarketSource.{
+    BroadcastStage,
+    DataFeedStage,
+    MarketEvent,
+    MemoryDataFeed,
+    Tick
+  }
+
   alias TheoryCraft.TestHelpers.TestEventConsumer
 
   @moduletag :capture_log
