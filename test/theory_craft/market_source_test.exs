@@ -5,7 +5,7 @@ defmodule TheoryCraft.MarketSourceTest do
   alias TheoryCraft.MarketSource.MarketEvent
   alias TheoryCraft.MarketSource.Tick
   alias TheoryCraft.MarketSource.Bar
-  alias TheoryCraft.MarketSource.DataFeeds.MemoryDataFeed
+  alias TheoryCraft.MarketSource.MemoryDataFeed
   alias TheoryCraft.MarketSource.IndicatorValue
   alias TheoryCraft.TestIndicators.SimpleIndicator
   alias TheoryCraft.TestIndicators.SMAIndicator

@@ -78,13 +78,13 @@ defmodule TheoryCraft.MarketSource do
   alias TheoryCraft.MarketSource.MarketEvent
   alias TheoryCraft.MarketSource.Processor
   alias TheoryCraft.MarketSource.Indicator
-  alias TheoryCraft.MarketSource.Processors.TickToBarProcessor
-  alias TheoryCraft.MarketSource.Processors.IndicatorProcessor
-  alias TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed
-  alias TheoryCraft.MarketSource.Stages.DataFeedStage
-  alias TheoryCraft.MarketSource.Stages.ProcessorStage
-  alias TheoryCraft.MarketSource.Stages.BroadcastStage
-  alias TheoryCraft.MarketSource.Stages.AggregatorStage
+  alias TheoryCraft.MarketSource.TickToBarProcessor
+  alias TheoryCraft.MarketSource.IndicatorProcessor
+  alias TheoryCraft.MarketSource.TicksCSVDataFeed
+  alias TheoryCraft.MarketSource.DataFeedStage
+  alias TheoryCraft.MarketSource.ProcessorStage
+  alias TheoryCraft.MarketSource.BroadcastStage
+  alias TheoryCraft.MarketSource.AggregatorStage
   alias TheoryCraft.TimeFrame
   alias TheoryCraft.Utils
 

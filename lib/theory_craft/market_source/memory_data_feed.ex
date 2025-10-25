@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.DataFeeds.MemoryDataFeed do
+defmodule TheoryCraft.MarketSource.MemoryDataFeed do
   @moduledoc """
   An in-memory data feed implementation.
 

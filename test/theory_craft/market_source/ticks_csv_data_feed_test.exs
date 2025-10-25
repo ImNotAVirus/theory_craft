@@ -1,7 +1,7 @@
-defmodule TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeedTest do
+defmodule TheoryCraft.MarketSource.TicksCSVDataFeedTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed
+  alias TheoryCraft.MarketSource.TicksCSVDataFeed
   alias TheoryCraft.MarketSource.Tick
 
   @fixture_path "test/fixtures/XAUUSD_ticks_dukascopy.csv"

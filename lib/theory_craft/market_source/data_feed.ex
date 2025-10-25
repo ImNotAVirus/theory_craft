@@ -15,8 +15,8 @@ defmodule TheoryCraft.MarketSource.DataFeed do
 
   ## Built-in DataFeed Implementations
 
-  - `TheoryCraft.MarketSource.DataFeeds.MemoryDataFeed` - In-memory ETS-based storage for testing and caching
-  - `TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed` - Reads tick data from CSV files
+  - `TheoryCraft.MarketSource.MemoryDataFeed` - In-memory ETS-based storage for testing and caching
+  - `TheoryCraft.MarketSource.TicksCSVDataFeed` - Reads tick data from CSV files
 
   ## Implementing a DataFeed
 

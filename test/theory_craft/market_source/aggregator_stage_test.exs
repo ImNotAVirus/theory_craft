@@ -1,7 +1,7 @@
-defmodule TheoryCraft.MarketSource.Stages.AggregatorStageTest do
+defmodule TheoryCraft.MarketSource.AggregatorStageTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSource.Stages.AggregatorStage
+  alias TheoryCraft.MarketSource.AggregatorStage
   alias TheoryCraft.MarketSource.MarketEvent
   alias TheoryCraft.TestHelpers
   alias TheoryCraft.TestHelpers.ManualProducer

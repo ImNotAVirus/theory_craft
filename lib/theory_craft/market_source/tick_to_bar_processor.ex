@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Processors.TickToBarProcessor do
+defmodule TheoryCraft.MarketSource.TickToBarProcessor do
   @moduledoc """
   Transforms tick data into bar data with configurable timeframes.
 

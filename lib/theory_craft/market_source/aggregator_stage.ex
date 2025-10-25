@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Stages.AggregatorStage do
+defmodule TheoryCraft.MarketSource.AggregatorStage do
   @moduledoc """
   A GenStage producer_consumer that synchronizes events from multiple parallel producers.
 
@@ -49,7 +49,7 @@ defmodule TheoryCraft.MarketSource.Stages.AggregatorStage do
   require Logger
 
   alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.Stages.StageHelpers
+  alias TheoryCraft.MarketSource.StageHelpers
 
   @typedoc """
   Options for starting an AggregatorStage.

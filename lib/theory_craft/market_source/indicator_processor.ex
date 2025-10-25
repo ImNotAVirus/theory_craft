@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Processors.IndicatorProcessor do
+defmodule TheoryCraft.MarketSource.IndicatorProcessor do
   @moduledoc """
   A Processor that wraps a `TheoryCraft.Indicator` behaviour for integration into processing pipelines.
 
@@ -8,7 +8,7 @@ defmodule TheoryCraft.MarketSource.Processors.IndicatorProcessor do
   ## Examples
 
       # Creating an indicator processor for a custom SMA indicator
-      alias TheoryCraft.MarketSource.Processors.IndicatorProcessor
+      alias TheoryCraft.MarketSource.IndicatorProcessor
 
       {:ok, processor_state} = IndicatorProcessor.init(
         module: MyIndicators.SMA,

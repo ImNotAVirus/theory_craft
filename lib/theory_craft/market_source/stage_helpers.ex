@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Stages.StageHelpers do
+defmodule TheoryCraft.MarketSource.StageHelpers do
   @moduledoc false
   # Internal helper functions for GenStage stages to reduce code duplication.
   #

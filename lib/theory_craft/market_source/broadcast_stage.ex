@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Stages.BroadcastStage do
+defmodule TheoryCraft.MarketSource.BroadcastStage do
   @moduledoc """
   A GenStage producer_consumer that broadcasts events to multiple consumers.
 
@@ -21,7 +21,7 @@ defmodule TheoryCraft.MarketSource.Stages.BroadcastStage do
 
   require Logger
 
-  alias TheoryCraft.MarketSource.Stages.StageHelpers
+  alias TheoryCraft.MarketSource.StageHelpers
 
   ## Public API
 

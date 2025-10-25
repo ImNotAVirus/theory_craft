@@ -1,9 +1,9 @@
-defmodule TheoryCraft.MarketSource.Processors.IndicatorProcessorTest do
+defmodule TheoryCraft.MarketSource.IndicatorProcessorTest do
   use ExUnit.Case, async: true
 
   alias TheoryCraft.MarketSource.Bar
   alias TheoryCraft.MarketSource.{IndicatorValue, MarketEvent}
-  alias TheoryCraft.MarketSource.Processors.IndicatorProcessor
+  alias TheoryCraft.MarketSource.IndicatorProcessor
 
   ## Mocks
 

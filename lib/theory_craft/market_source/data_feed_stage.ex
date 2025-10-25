@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Stages.DataFeedStage do
+defmodule TheoryCraft.MarketSource.DataFeedStage do
   @moduledoc """
   A GenStage producer that wraps a `TheoryCraft.DataFeed` behaviour.
 
@@ -61,7 +61,7 @@ defmodule TheoryCraft.MarketSource.Stages.DataFeedStage do
 
   alias TheoryCraft.MarketSource.DataFeed
   alias TheoryCraft.MarketSource.MarketEvent
-  alias TheoryCraft.MarketSource.Stages.StageHelpers
+  alias TheoryCraft.MarketSource.StageHelpers
   alias TheoryCraft.Utils
 
   @typedoc """

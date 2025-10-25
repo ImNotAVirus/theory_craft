@@ -1,8 +1,8 @@
-defmodule TheoryCraft.MarketSource.Stages.BroadcastStageTest do
+defmodule TheoryCraft.MarketSource.BroadcastStageTest do
   use ExUnit.Case, async: true
 
-  alias TheoryCraft.MarketSource.Stages.{BroadcastStage, DataFeedStage}
-  alias TheoryCraft.MarketSource.DataFeeds.MemoryDataFeed
+  alias TheoryCraft.MarketSource.{BroadcastStage, DataFeedStage}
+  alias TheoryCraft.MarketSource.MemoryDataFeed
   alias TheoryCraft.MarketSource.{MarketEvent, Tick}
   alias TheoryCraft.TestHelpers.TestEventConsumer
 

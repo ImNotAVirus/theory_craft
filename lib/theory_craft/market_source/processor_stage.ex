@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.Stages.ProcessorStage do
+defmodule TheoryCraft.MarketSource.ProcessorStage do
   @moduledoc """
   A GenStage producer_consumer that wraps a `TheoryCraft.Processor` behaviour.
 
@@ -52,7 +52,7 @@ defmodule TheoryCraft.MarketSource.Stages.ProcessorStage do
   require Logger
 
   alias TheoryCraft.MarketSource.Processor
-  alias TheoryCraft.MarketSource.Stages.StageHelpers
+  alias TheoryCraft.MarketSource.StageHelpers
   alias TheoryCraft.Utils
 
   @typedoc """

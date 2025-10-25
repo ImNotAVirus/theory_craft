@@ -1,4 +1,4 @@
-defmodule TheoryCraft.MarketSource.DataFeeds.TicksCSVDataFeed do
+defmodule TheoryCraft.MarketSource.TicksCSVDataFeed do
   @moduledoc """
   A data feed for streaming CSV tick data.
 
