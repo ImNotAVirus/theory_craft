@@ -23,9 +23,9 @@ defmodule TheoryCraft.Test do
   Documentation for `TheoryCraft`.
   """
 
-  import TheoryCraft.MarketSource
+  import TheoryCraft.MarketSimulator
 
-  alias TheoryCraft.MarketSource
+  alias TheoryCraft.MarketSimulator
   alias TheoryCraft.Utils
 
   ## Public API
@@ -42,7 +42,7 @@ defmodule TheoryCraft.Test do
     # opts = ctrader_opts()
 
     stream =
-      %MarketSource{}
+      %MarketSimulator{}
       # |> add_data(memory_stream, name: "ticks")
       |> add_data_ticks_from_csv(full_path, opts)
       |> resample("D", data: "XAUUSD", name: "XAUUSD_daily")
@@ -152,7 +152,7 @@ input_file =
   |> KinoTheoryCraft.Input.stream(name: Path.basename(filename))
 ```
 
-<!-- livebook:{"attrs":"eyJpbnB1dF92YXJpYWJsZSI6ImlucHV0X2ZpbGUiLCJ0YXNrX2lkIjoicmVzYW1wbGUiLCJ0aW1lZnJhbWVfbXVsdGlwbGllciI6NSwidGltZWZyYW1lX3VuaXQiOiJtIiwidGltZXpvbmUiOiJFdXJvcGUvUGFyaXMifQ","chunks":[[0,2508]],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":"eyJpbnB1dF92YXJpYWJsZSI6ImlucHV0X2ZpbGUiLCJ0YXNrX2lkIjoicmVzYW1wbGUiLCJ0aW1lZnJhbWVfbXVsdGlwbGllciI6NSwidGltZWZyYW1lX3VuaXQiOiJtIiwidGltZXpvbmUiOiJFdXJvcGUvUGFyaXMifQ","chunks":[[0,2493]],"kind":"Elixir.KinoTheoryCraft.TheoryCraftCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 alias KinoTheoryCraft.Control.{Chart, ChartController, Streamer}
@@ -248,18 +248,26 @@ Kino.Layout.grid([chart, bottom_row], boxed: true, gap: 12)
 ```elixir
 require TheoryCraftTA.TA, as: TA
 
+alias TheoryCraft.MarketSource.MarketEvent
 alias TheoryCraft.MarketSource
+alias KinoTheoryCraft.Chart
 
 Logger.configure(level: :info)
 
-%MarketSource{}
-|> MarketSource.add_data(input_file.stream, name: "data")
-|> MarketSource.resample("m5", name: "data_m5")
-|> MarketSource.add_indicators_layer([
-  TA.sma(data[:ask_volume], 1000),
-  TA.ema(data_m5[:close], 3),
-])
-|> MarketSource.stream()
-|> Enum.at(3300)
-# |> Enum.slice(3300..3302)
+market_source =
+  %MarketSource{}
+  |> MarketSource.add_data(input_file.stream, name: "data")
+  |> MarketSource.resample("m5", name: "data_m5")
+  |> MarketSource.add_indicators_layer([
+    TA.sma(data_m5[:close], 8, name: "sma_8"),
+    TA.ema(data_m5[:close], 13, name: "ema_13"),
+  ])
+  |> MarketSource.stream()
+
+chart =
+  Chart.new(width: :auto, height: 400, debug: true)
+  |> Chart.set_source(market_source)
+  |> Chart.add_data_from_source("data_m5", :candlestick)
+  |> Chart.add_data_from_source("sma_8", :line)
+  |> Chart.add_data_from_source("ema_13", :area, pane: 1)
 ```
