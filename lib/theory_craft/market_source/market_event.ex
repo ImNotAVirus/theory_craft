@@ -120,6 +120,60 @@ defmodule TheoryCraft.MarketSource.MarketEvent do
   end
 
   @doc """
+  Extracts the time from a specific data item in the event.
+
+  ## Parameters
+
+    - `event` - The MarketEvent struct
+    - `data_name` - The key to extract from event.data
+
+  ## Returns
+
+    - `DateTime.t()` - The extracted time
+
+  ## Behavior
+
+    - If data is an IndicatorValue: calls `IndicatorValue.bar_time/2` for lazy lookup
+    - If data is a Bar or Tick: returns their `time` field
+    - Otherwise: raises an error
+
+  ## Raises
+
+    - If `data_name` is not found in event data
+    - If data doesn't have a time field and is not an IndicatorValue
+
+  ## Examples
+
+      iex> alias TheoryCraft.MarketSource.Bar
+      iex> event = %MarketEvent{time: ~U[2024-01-01 10:02:34Z], data: %{"eurusd_m5" => %Bar{time: ~U[2024-01-01 10:00:00Z], close: 1.23}}}
+      iex> MarketEvent.extract_time(event, "eurusd_m5")
+      ~U[2024-01-01 10:00:00Z]
+
+      iex> alias TheoryCraft.MarketSource.IndicatorValue
+      iex> alias TheoryCraft.MarketSource.Bar
+      iex> event = %MarketEvent{time: ~U[2024-01-01 10:02:34Z], data: %{"eurusd_m5" => %Bar{time: ~U[2024-01-01 10:00:00Z], close: 1.23}, "sma20" => %IndicatorValue{value: 1.25, data_name: "eurusd_m5"}}}
+      iex> MarketEvent.extract_time(event, "sma20")
+      ~U[2024-01-01 10:00:00Z]
+
+  """
+  @spec extract_time(t(), String.t()) :: DateTime.t()
+  def extract_time(%MarketEvent{data: event_data}, data_name) do
+    case event_data do
+      %{^data_name => %IndicatorValue{} = ind} ->
+        IndicatorValue.bar_time(ind, event_data)
+
+      %{^data_name => %{time: data_time}} ->
+        data_time
+
+      %{^data_name => _value} ->
+        raise "data #{inspect(data_name)} doesn't have a time field"
+
+      %{} ->
+        raise "data_name #{inspect(data_name)} not found in event"
+    end
+  end
+
+  @doc """
   Extracts the `new_bar?` flag from the event's data map.
 
   ## Parameters
