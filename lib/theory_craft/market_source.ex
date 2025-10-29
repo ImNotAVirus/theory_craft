@@ -71,7 +71,7 @@ defmodule TheoryCraft.MarketSource do
   ## Limitations
 
   - Currently supports one data feed at a time
-  - Strategy execution not yet implemented (placeholders: `add_strategy`, `set_balance`, `set_commission`)
+  - Strategy execution not yet implemented (placeholder: `add_strategy`)
   """
 
   alias __MODULE__
@@ -98,9 +98,7 @@ defmodule TheoryCraft.MarketSource do
     # Building phase - store processor specs
     processor_layers: [],
     # Future features (placeholders)
-    strategies: [],
-    balance: nil,
-    commission: nil
+    strategies: []
   ]
 
   @type strategy_spec :: {module(), Keyword.t()}
@@ -109,9 +107,7 @@ defmodule TheoryCraft.MarketSource do
           data_feeds: Keyword.t({module(), Keyword.t()}),
           data_streams: [String.t() | non_neg_integer()],
           processor_layers: [[Processor.spec()]],
-          strategies: [strategy_spec()],
-          balance: number() | nil,
-          commission: number() | nil
+          strategies: [strategy_spec()]
         }
 
   # require TheoryCraftTA.TA, as: TA
@@ -130,8 +126,6 @@ defmodule TheoryCraft.MarketSource do
   #   ], concurrency: 4)
   #   |> add_indicator(TA.sma(volume[:value], 14, name: "volume_sma_14"))
   #   |> add_strategy(TheoryCraft.Strategies.MyStrategy)
-  #   |> set_balance(100_000)
-  #   |> set_commission(0.001)
   #   |> stream()
 
   # Enum.each(stream, fn event ->
@@ -533,38 +527,6 @@ defmodule TheoryCraft.MarketSource do
     strategy_opts = Keyword.merge(spec_opts, opts)
 
     %MarketSource{market | strategies: strategies ++ [{strategy_module, strategy_opts}]}
-  end
-
-  @doc """
-  Sets the initial balance for backtesting.
-
-  **Note**: Balance tracking is not yet implemented.
-
-  ## Parameters
-
-    - `market`: The market source.
-    - `balance`: The initial balance amount.
-
-  """
-  @spec set_balance(t(), number()) :: t()
-  def set_balance(%MarketSource{} = market, balance) when is_number(balance) do
-    %MarketSource{market | balance: balance}
-  end
-
-  @doc """
-  Sets the commission rate for trades.
-
-  **Note**: Commission calculation is not yet implemented.
-
-  ## Parameters
-
-    - `market`: The market source.
-    - `commission`: The commission rate (e.g., 0.001 for 0.1%).
-
-  """
-  @spec set_commission(t(), number()) :: t()
-  def set_commission(%MarketSource{} = market, commission) when is_number(commission) do
-    %MarketSource{market | commission: commission}
   end
 
   @doc """
