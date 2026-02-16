@@ -103,6 +103,62 @@ defmodule TheoryCraft.TimeFrame do
     end
   end
 
+  @doc """
+  Returns the number of milliseconds for a given timeframe.
+
+  Only works for timeframes with fixed durations: seconds (`s`), minutes (`m`),
+  hours (`h`), days (`D`), and weeks (`W`). Ticks (`t`) have a variable duration
+  and return an error.
+
+  Months (`M`) use an approximate value of 30 days.
+
+  ## Examples
+
+      iex> TimeFrame.to_milliseconds({"s", 1})
+      {:ok, 1_000}
+
+      iex> TimeFrame.to_milliseconds({"s", 30})
+      {:ok, 30_000}
+
+      iex> TimeFrame.to_milliseconds({"m", 1})
+      {:ok, 60_000}
+
+      iex> TimeFrame.to_milliseconds({"m", 5})
+      {:ok, 300_000}
+
+      iex> TimeFrame.to_milliseconds({"h", 1})
+      {:ok, 3_600_000}
+
+      iex> TimeFrame.to_milliseconds({"h", 4})
+      {:ok, 14_400_000}
+
+      iex> TimeFrame.to_milliseconds({"D", 1})
+      {:ok, 86_400_000}
+
+      iex> TimeFrame.to_milliseconds({"W", 1})
+      {:ok, 604_800_000}
+
+      iex> TimeFrame.to_milliseconds({"W", 2})
+      {:ok, 1_209_600_000}
+      
+      iex> TimeFrame.to_milliseconds({"M", 1})
+      {:ok, 2_592_000_000}
+
+      iex> TimeFrame.to_milliseconds({"M", 3})
+      {:ok, 7_776_000_000}
+
+      iex> TimeFrame.to_milliseconds({"t", 1})
+      {:error, :variable_duration}
+
+  """
+  @spec to_milliseconds(t()) :: {:ok, non_neg_integer()} | {:error, :variable_duration}
+  def to_milliseconds({unit, mult}) do
+    case unit_to_milliseconds(unit) do
+      {:ok, ms} -> {:ok, ms * mult}
+      :error -> {:error, :variable_duration}
+    end
+  end
+
   ## Private functions
 
   defp extract_unit(str) do
@@ -127,4 +183,18 @@ defmodule TheoryCraft.TimeFrame do
       _ -> {:error, {:invalid_multiplier, str}}
     end
   end
+
+  # :timer.seconds(1)
+  defp unit_to_milliseconds("s"), do: {:ok, 1000}
+  # :timer.minutes(1)
+  defp unit_to_milliseconds("m"), do: {:ok, 60_000}
+  # :timer.hours(1)
+  defp unit_to_milliseconds("h"), do: {:ok, 3_600_000}
+  # :timer.hours(24)
+  defp unit_to_milliseconds("D"), do: {:ok, 86_400_000}
+  # :timer.hours(24 * 7)
+  defp unit_to_milliseconds("W"), do: {:ok, 604_800_000}
+  # :timer.hours(24 * 30)
+  defp unit_to_milliseconds("M"), do: {:ok, 2_592_000_000}
+  defp unit_to_milliseconds(_), do: :error
 end
